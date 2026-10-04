@@ -8,6 +8,9 @@ export type Lead = {
   mobile: string;
   email: string;
   otpVerified?: boolean;
+  mobileProof?: string; // signed by the server when the SMS code matched
+  emailVerified?: boolean;
+  emailProof?: string; // signed by the server when the email code matched
   pin?: string;
   state?: string;
   district?: string;
@@ -37,6 +40,7 @@ export const EMPTY_LEAD: Lead = { name: "", mobile: "", email: "" };
 export function scoreLead(l: Lead) {
   let s = 0;
   if (l.otpVerified) s += 10;
+  if (l.emailVerified) s += 5;
   if (l.own === "own") s += 15;
   else if (l.ownerOk === "yes") s += 5;
   if (l.ptype === "house" || l.ptype === "commercial" || l.ptype === "industrial") s += 10;

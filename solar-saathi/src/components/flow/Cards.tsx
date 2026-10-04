@@ -37,11 +37,13 @@ export function ResultsCard({
   est,
   lead,
   onBook,
+  onLater,
 }: {
   lang: Lang;
   est: Estimate;
   lead: Lead;
   onBook: () => void;
+  onLater: () => void;
 }) {
   const r = FLOW[lang].result;
   const showEmi = lead.pay === "bank" || lead.pay === "emi";
@@ -140,6 +142,9 @@ export function ResultsCard({
           <IconCalendar className="h-5 w-5" />
           {r.cta}
         </PrimaryButton>
+        <button onClick={onLater} className="mx-auto mt-2 block px-3 py-1.5 text-[13px] font-semibold text-white/55 hover:text-white">
+          {r.later}
+        </button>
       </div>
     </div>
   );
@@ -185,7 +190,7 @@ export function BookedCard({
           { icon: <IconCalendar className="h-4.5 w-4.5" />, text: dateLabel },
           { icon: <IconClock className="h-4.5 w-4.5" />, text: slotLabel },
           { icon: <IconHeadset className="h-4.5 w-4.5" />, text: fill(b.team, { district: lead.district ?? "" }) },
-          { icon: <IconWhatsApp className="h-4.5 w-4.5" />, text: fill(b.sent, { mobile: displayMobile(lead.mobile) }) },
+          { icon: <IconPhone className="h-4.5 w-4.5" />, text: fill(b.sent, { mobile: displayMobile(lead.mobile) }) },
         ].map((row, i) => (
           <motion.li
             key={i}

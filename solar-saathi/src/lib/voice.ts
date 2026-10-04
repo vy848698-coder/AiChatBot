@@ -3,7 +3,12 @@
 // mascot's mouth and chest equalizer read every frame.
 //
 // Order of preference:
-//   1. Sarvam AI (Bulbul v3) through /api/tts: natural Odia/Hindi/English.
+//   1. The cloud voice for the language (free Edge voices for English and
+//      Hindi; Odia only once an Azure or Sarvam key is set). A line is spoken
+//      sentence by sentence: fixed sentences come pre-recorded from
+//      /voice/{lang}/{id}.mp3 (instant), the rest from /api/tts. The first
+//      sentence starts as soon as it is ready while the others load, and the
+//      silence around each clip is trimmed so sentences flow naturally.
 //      Played through Web Audio, so `level` follows the real waveform.
 //   2. The browser's speechSynthesis voice for the language.
 //   3. Silent: same timing and mouth movement, text only.
@@ -13,10 +18,15 @@
 
 import { audioCtx } from "./audio";
 import { bcpOf, type Lang } from "./i18n";
+import { clipId, splitSentences, type VoiceManifest } from "./tts/clips";
 
 type Listener = () => void;
 
 const PREFERRED = /natural|neural|online|google|heera|neerja|swara|kalpana|lekha|aditi|ananya/i;
+const FETCH_TIMEOUT_MS = 12000;
+
+// Pause between sentences, after trimming each clip's own silence.
+const gapAfter = (sentence: string) => (sentence.endsWith("?") ? 0.34 : 0.26);
 
 class Voice {
   level = 0;
@@ -25,7 +35,7 @@ class Voice {
   bands = { low: 0, mid: 0, high: 0 };
   speaking = false;
   muted = false;
-  cloud: boolean | null = null; // null until /api/tts has been probed
+  cloud: Partial<Record<Lang, boolean>> | null = null; // per language; null until /api/tts has been probed
 
   private subs = new Set<Listener>();
   private token = 0;
@@ -33,10 +43,11 @@ class Voice {
   private raf = 0;
   private voices: SpeechSynthesisVoice[] = [];
   private analyser: AnalyserNode | null = null;
-  private source: AudioBufferSourceNode | null = null;
+  private sources: AudioBufferSourceNode[] = [];
   private probing: Promise<void> | null = null;
+  private recorded: Partial<Record<Lang, Set<string>>> = {}; // pre-recorded clip ids per language
   private bytes = new Map<string, Promise<ArrayBuffer>>();
-  private buffers = new Map<string, AudioBuffer>();
+  private buffers = new Map<string, Promise<AudioBuffer>>();
   private wave = new Float32Array(1024);
   private freq = new Uint8Array(512);
 
@@ -70,12 +81,27 @@ class Voice {
     void this.probe();
   }
 
-  // Ask the server once whether Sarvam is configured. Safe before any tap.
+  // Ask the server once which languages have a cloud voice, and load the list
+  // of pre-recorded sentences made with that same voice. Safe before any tap.
   probe() {
-    this.probing ??= fetch("/api/tts")
-      .then((r) => r.json())
-      .then((j: { enabled?: boolean }) => void (this.cloud = !!j.enabled))
-      .catch(() => void (this.cloud = false));
+    this.probing ??= (async () => {
+      try {
+        const [tts, manifest] = await Promise.all([
+          fetch("/api/tts").then(
+            (r) => r.json() as Promise<{ langs?: Partial<Record<Lang, boolean>>; voices?: Partial<Record<Lang, string>> }>,
+          ),
+          fetch("/voice/manifest.json")
+            .then((r) => (r.ok ? (r.json() as Promise<VoiceManifest>) : null))
+            .catch(() => null),
+        ]);
+        this.cloud = tts.langs ?? {};
+        for (const [lang, spec] of Object.entries(tts.voices ?? {}) as [Lang, string][]) {
+          if (manifest?.voices[lang] === spec) this.recorded[lang] = new Set(manifest.clips[lang] ?? []);
+        }
+      } catch {
+        this.cloud = {};
+      }
+    })();
     return this.probing;
   }
 
@@ -97,21 +123,18 @@ class Voice {
   }
 
   hasVoice(lang: Lang) {
-    return this.cloud === true || !!this.pickVoice(lang);
+    return !!this.cloud?.[lang] || !!this.pickVoice(lang);
   }
 
-  // Get a line's audio ready (download, and decode once audio is unlocked).
-  // Resolves either way; callers use it to keep "typing…" up until then.
+  // Get a line ready. Every sentence starts loading; resolves once the first
+  // one can play (callers keep "typing…" up until then).
   async prepare(text: string, lang: Lang) {
     if (this.muted) return;
     await this.probe();
-    if (!this.cloud) return;
-    try {
-      if (audioCtx()) await this.cloudBuffer(text, lang);
-      else await this.fetchBytes(text, lang);
-    } catch {
-      /* speak() falls back to the browser voice */
-    }
+    if (!this.cloud?.[lang]) return;
+    const loads = splitSentences(text).map((s) => (audioCtx() ? this.clip(s, lang) : this.fetchBytes(s, lang)));
+    loads.forEach((p) => p.catch(() => {}));
+    await loads[0]?.catch(() => {}); // speak() falls back to the browser voice
   }
 
   prefetch(text: string, lang: Lang) {
@@ -126,10 +149,12 @@ class Voice {
     if (!this.muted) {
       await this.probe();
       if (token !== this.token) return;
-      if (this.cloud) {
-        const buf = await this.cloudBuffer(say, lang).catch(() => null);
+      const sentences = splitSentences(say);
+      if (this.cloud?.[lang] && sentences.length && audioCtx()) {
+        const clips = sentences.map((s) => this.clip(s, lang).catch(() => null));
+        const first = await clips[0];
         if (token !== this.token) return;
-        if (buf && audioCtx()) return this.playBuffer(buf, text, token, onProgress, estimateMs(text, lang) / 1000);
+        if (first) return this.playClips(sentences, clips, text, say, token, onProgress, estimateMs(text, lang) / 1000);
       }
     }
     return this.speakBrowser(text, say, lang, token, onProgress);
@@ -145,12 +170,14 @@ class Voice {
   stop() {
     this.token++;
     if (typeof window !== "undefined") window.speechSynthesis?.cancel();
-    try {
-      this.source?.stop();
-    } catch {
-      /* already stopped */
+    for (const s of this.sources) {
+      try {
+        s.stop();
+      } catch {
+        /* not started or already stopped */
+      }
     }
-    this.source = null;
+    this.sources = [];
     this.analyser = null;
     if (this.speaking) {
       this.speaking = false;
@@ -158,58 +185,106 @@ class Voice {
     }
   }
 
-  private fetchBytes(text: string, lang: Lang) {
-    const key = `${lang}|${text}`;
+  // One sentence's MP3: the pre-recorded file when there is one, else /api/tts.
+  private fetchBytes(sentence: string, lang: Lang) {
+    const key = `${lang}|${sentence}`;
     let p = this.bytes.get(key);
     if (!p) {
-      p = fetch("/api/tts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, lang }),
-      }).then((res) => {
-        if (!res.ok) throw new Error(`tts ${res.status}`);
-        return res.arrayBuffer();
-      });
+      const id = clipId(sentence);
+      const live = () =>
+        fetch("/api/tts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: sentence, lang }),
+          signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+        }).then((res) => {
+          if (!res.ok) throw new Error(`tts ${res.status}`);
+          return res.arrayBuffer();
+        });
+      p = this.recorded[lang]?.has(id)
+        ? fetch(`/voice/${lang}/${id}.mp3`, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
+            .then((res) => (res.ok ? res.arrayBuffer() : live()))
+            .catch(live)
+        : live();
       p.catch(() => this.bytes.delete(key)); // allow a retry later
       this.bytes.set(key, p);
     }
     return p;
   }
 
-  private async cloudBuffer(text: string, lang: Lang) {
-    const key = `${lang}|${text}`;
-    const hit = this.buffers.get(key);
-    if (hit) return hit;
-    const ctx = audioCtx();
-    if (!ctx) return null;
-    // decodeAudioData detaches its input, so decode a copy of the cached bytes.
-    const buf = await ctx.decodeAudioData((await this.fetchBytes(text, lang)).slice(0));
-    this.buffers.set(key, buf);
-    return buf;
+  // Decoded, silence-trimmed clip for one sentence (cached).
+  private clip(sentence: string, lang: Lang) {
+    const key = `${lang}|${sentence}`;
+    let p = this.buffers.get(key);
+    if (!p) {
+      const ctx = audioCtx();
+      if (!ctx) return Promise.reject(new Error("audio locked"));
+      // decodeAudioData detaches its input, so decode a copy of the cached bytes.
+      p = this.fetchBytes(sentence, lang)
+        .then((b) => ctx.decodeAudioData(b.slice(0)))
+        .then((buf) => trimSilence(ctx, buf));
+      p.catch(() => this.buffers.delete(key));
+      this.buffers.set(key, p);
+    }
+    return p;
   }
 
+  // Plays the sentences back to back on the audio clock. Each one is queued
+  // as soon as it has loaded; a sentence that fails to load is skipped.
   // `textSec`: natural reading time of the shown text. When the voice says
-  // more than is shown (e.g. a short caption over a long spoken summary),
-  // the caption types at its own pace instead of crawling for the whole clip.
-  private playBuffer(buf: AudioBuffer, text: string, token: number, onProgress?: (n: number) => void, textSec = Infinity) {
+  // more than is shown (a short caption over a long spoken summary), the
+  // caption types at its own pace instead of crawling for the whole line.
+  private playClips(
+    sentences: string[],
+    clips: Promise<AudioBuffer | null>[],
+    text: string,
+    say: string,
+    token: number,
+    onProgress?: (n: number) => void,
+    textSec = Infinity,
+  ) {
     const ctx = audioCtx()!;
     void ctx.resume();
-    const src = ctx.createBufferSource();
     const analyser = ctx.createAnalyser();
     analyser.fftSize = 1024;
     analyser.smoothingTimeConstant = 0.35;
-    src.buffer = buf;
-    src.connect(analyser).connect(ctx.destination);
-    this.source = src;
+    analyser.connect(ctx.destination);
     this.analyser = analyser;
+    this.sources = [];
     this.speaking = true;
     this.emit();
     this.loop();
 
+    const total = sentences.reduce((n, s) => n + s.length, 0) || 1;
+    const sameText = text === say;
+    const timeline: { start: number; end: number; c0: number; c1: number }[] = [];
+    let cursor = ctx.currentTime + 0.03;
+    let queued = false; // every sentence has been placed on the timeline (or skipped)
+
+    void (async () => {
+      let chars = 0;
+      for (let i = 0; i < sentences.length; i++) {
+        const buf = await clips[i];
+        if (token !== this.token) return;
+        const c0 = chars;
+        chars += sentences[i].length;
+        if (!buf) continue;
+        const start = Math.max(cursor, ctx.currentTime + 0.03);
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        src.connect(analyser);
+        src.start(start);
+        this.sources.push(src);
+        timeline.push({ start, end: start + buf.duration, c0, c1: chars });
+        cursor = start + buf.duration + gapAfter(sentences[i]);
+      }
+      queued = true;
+    })();
+
     return new Promise<void>((resolve) => {
-      const t0 = ctx.currentTime;
       const w0 = performance.now();
-      const dur = Math.max(buf.duration - 0.15, 0.3);
+      let lastClock = ctx.currentTime;
+      let stalledSince = 0;
       let done = false;
       const finish = () => {
         if (done) return;
@@ -217,7 +292,7 @@ class Voice {
         if (token === this.token) {
           this.speaking = false;
           this.analyser = null;
-          this.source = null;
+          this.sources = [];
           onProgress?.(text.length);
           this.emit();
         }
@@ -226,21 +301,26 @@ class Voice {
       const tick = () => {
         if (done) return;
         if (token !== this.token) return finish();
-        // Follow the audio clock, with wall-clock time as a backstop: if the
-        // device pauses audio (app switch, Bluetooth change) the words still
-        // finish typing and the conversation moves on.
-        const span = Math.min(dur, textSec);
-        const pAudio = (ctx.currentTime - t0) / span;
-        const pWall = ((performance.now() - w0) / 1000 / span) * 0.92;
-        const p = Math.min(1, Math.max(pAudio, pWall));
-        onProgress?.(Math.floor(p * text.length));
-        if ((performance.now() - w0) / 1000 >= dur * 1.25) return finish();
+        const now = ctx.currentTime;
+        let said = 0;
+        for (const s of timeline) {
+          if (now >= s.end) said = s.c1;
+          else if (now > s.start) said = s.c0 + ((s.c1 - s.c0) * (now - s.start)) / (s.end - s.start);
+        }
+        const p = sameText ? said / total : (performance.now() - w0) / 1000 / textSec;
+        onProgress?.(Math.floor(Math.min(1, p) * text.length));
+        const last = timeline[timeline.length - 1];
+        if (queued && (!last || now >= last.end)) return finish();
+        // If the device pauses audio (app switch, Bluetooth change) the clock
+        // stops; don't hang the conversation on it.
+        if (now !== lastClock) {
+          lastClock = now;
+          stalledSince = 0;
+        } else if (!stalledSince) stalledSince = performance.now();
+        else if (performance.now() - stalledSince > 3000) return finish();
         requestAnimationFrame(tick);
       };
-      src.onended = finish;
-      src.start();
       requestAnimationFrame(tick);
-      setTimeout(finish, (dur * 1.5 + 2) * 1000);
     });
   }
 
@@ -363,6 +443,23 @@ class Voice {
 
 function score(v: SpeechSynthesisVoice) {
   return (PREFERRED.test(v.name) ? 2 : 0) + (v.localService ? 0 : 1);
+}
+
+// Cuts the silence a TTS clip carries at both ends (keeps a few ms so
+// consonants aren't clipped). Pauses between sentences are added on playback.
+function trimSilence(ctx: BaseAudioContext, buf: AudioBuffer) {
+  const data = buf.getChannelData(0);
+  const floor = 0.012;
+  let a = 0;
+  let b = data.length - 1;
+  while (a < b && Math.abs(data[a]) < floor) a++;
+  while (b > a && Math.abs(data[b]) < floor) b--;
+  a = Math.max(0, a - Math.round(buf.sampleRate * 0.03));
+  b = Math.min(data.length - 1, b + Math.round(buf.sampleRate * 0.09));
+  if (b - a < buf.sampleRate * 0.1) return buf; // nearly silent: leave as is
+  const out = ctx.createBuffer(buf.numberOfChannels, b - a + 1, buf.sampleRate);
+  for (let ch = 0; ch < buf.numberOfChannels; ch++) out.copyToChannel(buf.getChannelData(ch).subarray(a, b + 1), ch);
+  return out;
 }
 
 // Rough speaking time; Indic scripts pack more sound per character.

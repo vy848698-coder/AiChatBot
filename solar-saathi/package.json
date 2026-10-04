@@ -6,13 +6,17 @@
     "dev": "next dev -H 0.0.0.0 -p 3005",
     "build": "next build",
     "start": "next start -p 3005",
-    "lint": "eslint"
+    "lint": "eslint",
+    "voice:build": "tsx scripts/build-voice.ts"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.9",
     "@react-three/fiber": "^9.8.1",
+    "libphonenumber-js": "^1.13.14",
     "motion": "^14.0.0",
+    "msedge-tts": "^2.0.9",
     "next": "16.3.8",
+    "nodemailer": "^10.0.14",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "three": "^0.186.1"
@@ -26,6 +30,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.3.8",
     "tailwindcss": "^4",
+    "tsx": "^4.23.15",
     "typescript": "^5"
   }
 }

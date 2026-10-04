@@ -3,14 +3,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { AnimatePresence, motion, useAnimate } from "motion/react";
 import { computeEstimate, rupees, type Category } from "@/lib/estimate";
-import { FLOW } from "@/lib/flowCopy";
+import { FLOW, type FlowCopy } from "@/lib/flowCopy";
 import { STRINGS, fill, type Lang } from "@/lib/i18n";
 import { EMPTY_LEAD, saveLead, type Lead } from "@/lib/lead";
 import { HOME_STATE, matchDistrict, matchState } from "@/lib/regions";
 import { sfx } from "@/lib/sfx";
 import { displayMobile, spokenEmail, spokenMobile, spokenRupees } from "@/lib/speech";
 import { useSpeechInput } from "@/lib/useSpeechInput";
-import { cleanMobile, firstName, isEmail, isName } from "@/lib/validate";
+import { cleanMobile, emailTypo, firstName, isArea, isEmail, isExactBill, isFakeMobile, isMobile, isName, isPin, tidyName } from "@/lib/validate";
 import { voice } from "@/lib/voice";
 import { BookedCard, ExpertSheet, ResultsCard, SavedCard } from "../flow/Cards";
 import { Busy, Chip, ChoiceGrid, DateChips, FieldInput, NextLabel, OtpBoxes, PrimaryButton, RangeSlider, RegionSelect, type DayOpt, type Option } from "../flow/Widgets";
@@ -23,27 +23,27 @@ export type Speak = (text: string, opts?: { spoken?: string; onProgress?: (n: nu
 
 // ── the journey ──────────────────────────────────────────────────────────
 type NodeId =
-  | "name" | "mobile" | "otp" | "email" | "review"
+  | "name" | "mobile" | "otp" | "email" | "emailOtp" | "review"
   | "pin" | "region" | "area"
   | "own" | "ownerOk" | "ptype" | "roofType" | "bill" | "billExact" | "roof" | "goal" | "cuts" | "when" | "pay"
   | "calc" | "results"
-  | "consult" | "mode" | "date" | "slot" | "booked" | "skip";
+  | "mode" | "date" | "slot" | "booked" | "skip";
 
 const SECTION: Record<NodeId, number> = {
-  name: 0, mobile: 0, otp: 0, email: 0, review: 0,
+  name: 0, mobile: 0, otp: 0, email: 0, emailOtp: 0, review: 0,
   pin: 1, region: 1, area: 1,
   own: 2, ownerOk: 2, ptype: 2, roofType: 2, bill: 2, billExact: 2, roof: 2, goal: 2, cuts: 2, when: 2, pay: 2,
   calc: 3, results: 3,
-  consult: 4, mode: 4, date: 4, slot: 4, booked: 4, skip: 4,
+  mode: 4, date: 4, slot: 4, booked: 4, skip: 4,
 };
 
 // "n / total" shown on the card (follow-ups share their parent's number).
 const STEP: Partial<Record<NodeId, [number, number]>> = {
-  name: [1, 3], mobile: [2, 3], otp: [2, 3], email: [3, 3],
+  name: [1, 3], mobile: [2, 3], otp: [2, 3], email: [3, 3], emailOtp: [3, 3],
   pin: [1, 3], region: [2, 3], area: [3, 3],
   own: [1, 6], ownerOk: [1, 6], ptype: [2, 6], roofType: [2, 6], bill: [3, 6], billExact: [3, 6], roof: [3, 6],
   goal: [4, 6], cuts: [4, 6], when: [5, 6], pay: [6, 6],
-  consult: [1, 4], mode: [2, 4], date: [3, 4], slot: [4, 4],
+  mode: [1, 3], date: [2, 3], slot: [3, 3],
 };
 
 const CHOICE_ICONS: Record<string, string> = {
@@ -57,6 +57,11 @@ const CHOICE_ICONS: Record<string, string> = {
 };
 const SLOT_HOUR = { s1: 10, s2: 12, s3: 14, s4: 16 } as const;
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+// The two verification codes: SMS to the mobile, and email.
+type CodeKind = "tel" | "mail";
+const CODE_NODE: Record<CodeKind, NodeId> = { tel: "otp", mail: "emailOtp" };
+// A code lasts 10 minutes; reuse it only with a minute to spare.
+const stillValid = (sentAt: number) => Date.now() - sentAt < 9 * 60_000;
 
 function nextNode(id: NodeId, l: Lead, editing: boolean): NodeId {
   const societyRoof = l.ptype === "flat" && l.roofType === "society";
@@ -64,7 +69,8 @@ function nextNode(id: NodeId, l: Lead, editing: boolean): NodeId {
     case "name": return editing ? "review" : "mobile";
     case "mobile": return "otp";
     case "otp": return editing ? "review" : "email";
-    case "email": return "review";
+    case "email": return "emailOtp";
+    case "emailOtp": return "review";
     case "review": return "pin";
     case "pin": return "region";
     case "region": return "area";
@@ -81,8 +87,7 @@ function nextNode(id: NodeId, l: Lead, editing: boolean): NodeId {
     case "when": return "pay";
     case "pay": return "calc";
     case "calc": return "results";
-    case "results": return "consult";
-    case "consult": return l.consult === "yes" ? "mode" : "skip";
+    case "results": return l.consult === "yes" ? "mode" : "skip";
     case "mode": return "date";
     case "date": return "slot";
     default: return "booked";
@@ -91,11 +96,12 @@ function nextNode(id: NodeId, l: Lead, editing: boolean): NodeId {
 
 // Fields a step owns: cleared when the user goes back to it.
 const CLEARS: Partial<Record<NodeId, (keyof Lead)[]>> = {
-  name: ["name"], mobile: ["mobile", "otpVerified"], otp: ["otpVerified"], email: ["email"],
+  name: ["name"], mobile: ["mobile", "otpVerified", "mobileProof"], otp: ["otpVerified", "mobileProof"], email: ["email", "emailVerified", "emailProof"],
+  emailOtp: ["emailVerified", "emailProof"],
   pin: ["pin", "state", "district", "area"], region: ["state", "district"], area: ["area"],
   own: ["own", "ownerOk"], ownerOk: ["ownerOk"], ptype: ["ptype", "roofType"], roofType: ["roofType"],
   bill: ["bill"], billExact: ["bill"], roof: ["roof"], goal: ["goal", "cuts"], cuts: ["cuts"], when: ["when"], pay: ["pay"],
-  consult: ["consult"], mode: ["mode"], date: ["date"], slot: ["slot", "bookingId"],
+  mode: ["mode", "consult"], date: ["date"], slot: ["slot", "bookingId"],
 };
 
 function categoryOf(l: Lead): Category {
@@ -104,11 +110,32 @@ function categoryOf(l: Lead): Category {
   return "residential";
 }
 
-function mobileDigits(raw: string) {
-  let d = raw.replace(/\D/g, "");
-  if (d.length === 12 && d.startsWith("91")) d = d.slice(2);
-  return d.replace(/^0+/, "");
+// Saathi's reaction to the answer just given; said before the next question.
+function reactionFor(id: NodeId, l: Lead, r: FlowCopy["react"]): string {
+  switch (id) {
+    case "emailOtp": return r.emailVerified;
+    case "own": return l.own === "own" ? r.own : "";
+    case "ownerOk": return l.ownerOk === "yes" ? r.ownerYes : r.ownerNo;
+    case "ptype": return l.ptype ? r[l.ptype] : "";
+    case "roofType": return l.roofType === "society" ? r.roofSociety : r.roofOwn;
+    case "bill":
+    case "billExact": return (l.bill ?? 0) >= 3000 ? r.billHigh : r.billLow;
+    case "roof": return l.roof == null ? r.roofUnsure : r.roofKnown;
+    case "goal":
+      if (l.goal === "subsidy") return categoryOf(l) === "commercial" ? r.subsidyNone : l.state === HOME_STATE ? r.subsidyOdisha : r.subsidyOther;
+      return l.goal ? r[l.goal] : "";
+    case "cuts": return r.cuts;
+    case "when": return l.when === "now" ? r.now : l.when === "later" ? r.later : r.soon;
+    case "pay": return l.pay === "full" ? r.payFull : l.pay === "guide" ? r.payGuide : r.payLoan;
+    default: return "";
+  }
 }
+
+// Answers a step can take, used to load Saathi's next line before the user
+// picks (so the reply plays at once).
+const CHOICE_FIELD: Partial<Record<NodeId, keyof Lead>> = {
+  own: "own", ownerOk: "ownerOk", ptype: "ptype", roofType: "roofType", goal: "goal", cuts: "cuts", when: "when", pay: "pay", mode: "mode", slot: "slot",
+};
 
 // Voice answer for option cards: match the transcript against the option
 // labels in the current language and in English.
@@ -164,6 +191,8 @@ export function FlowScreen({
   const [burst, setBurst] = useState(0);
   const [expert, setExpert] = useState(false);
   const [shake, setShake] = useState(0);
+  const [emailFix, setEmailFix] = useState<string | null>(null);
+  const [devCode, setDevCode] = useState<string | null>(null);
 
   const nodeRef = useRef<NodeId>("name");
   const leadRef = useRef<Lead>(EMPTY_LEAD);
@@ -171,7 +200,12 @@ export function FlowScreen({
   const history = useRef<NodeId[]>([]);
   const editing = useRef(false);
   const turn = useRef(0);
-  const ackIdx = useRef(0);
+  const verifying = useRef(false);
+  const typoAsked = useRef("");
+  const lastLine = useRef<Promise<void>>(Promise.resolve());
+  // Signed by the server; hold only a hash of the code (or the SMS provider's reference).
+  const codeTicket = useRef<Record<CodeKind, string>>({ tel: "", mail: "" });
+  const codeSent = useRef<Partial<Record<CodeKind, { to: string; at: number; used: boolean }>>>({});
   const started = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const speaking = useSyncExternalStore(voice.subscribe, () => voice.speaking, () => false);
@@ -209,86 +243,116 @@ export function FlowScreen({
   }, [setMood]);
 
   // What Saathi says when a step opens.
-  const lineFor = useCallback(
-    (id: NodeId, how: "fwd" | "back" | "edit"): { text: string; spoken?: string } => {
-      const L = leadRef.current;
-      const first = firstName(L.name);
-      const ack = how === "fwd" ? `${f.acks[ackIdx.current++ % f.acks.length]} ` : "";
-      switch (id) {
-        case "name": return { text: how === "edit" ? t.editAsk.name : t.askName };
-        case "mobile":
-          return { text: how === "fwd" ? fill(t.nameAck, { name: L.name, first }) : how === "edit" ? t.editAsk.mobile : t.ask.mobile };
-        case "otp":
-          return { text: fill(f.otp.ask, { mobile: displayMobile(L.mobile) }), spoken: fill(f.otp.ask, { mobile: spokenMobile(L.mobile) }) };
-        case "email": return { text: how === "fwd" ? f.otp.verifiedThenEmail : how === "edit" ? t.editAsk.email : t.ask.email };
-        case "review":
-          return {
-            text: t.confirmAsk,
-            spoken: fill(t.confirm, { name: L.name, mobile: spokenMobile(L.mobile), email: spokenEmail(L.email, lang) }),
-          };
-        case "pin": return { text: fill(f.pin.ask, { first }) };
-        case "region":
-          return { text: geoFound.current ? fill(f.pin.found, { district: L.district ?? "", state: L.state ?? "" }) : f.pin.notFound };
-        case "area": return { text: areas.length ? f.area.ask : f.area.askPlain };
-        case "own": return { text: f.own.ask };
-        case "ownerOk": return { text: f.ownerOk.ask };
-        case "ptype": return { text: ack + f.ptype.ask };
-        case "roofType": return { text: f.roofType.ask };
-        case "bill": return { text: ack + f.bill.ask };
-        case "billExact": return { text: f.bill.exactAsk };
-        case "roof": return { text: ack + f.roof.ask };
-        case "goal": return { text: ack + f.goal.ask };
-        case "cuts": return { text: f.cuts.ask };
-        case "when": return { text: ack + f.when.ask };
-        case "pay": return { text: ack + f.pay.ask };
-        case "calc": return { text: f.calc.title };
-        case "results": {
-          const e = computeEstimate(L.bill ?? 3000, L.roof ?? null, categoryOf(L), L.state === HOME_STATE);
-          const v = {
-            first,
-            kw: e.kw,
-            cost: spokenRupees(e.cost, lang),
-            subsidy: spokenRupees(e.subsidy, lang),
-            invest: spokenRupees(e.investment, lang),
-            monthly: spokenRupees(e.monthlySaving, lang),
-            life: spokenRupees(e.savings25, lang),
-          };
-          return { text: fill(f.result.caption, { first }), spoken: fill(e.subsidy ? f.result.say : f.result.sayNoSub, v) };
-        }
-        case "consult": return { text: f.consult.ask };
-        case "mode": return { text: ack + f.mode.ask };
-        case "date": return { text: f.date.ask };
-        case "slot": return { text: f.slot.ask };
-        case "booked": {
-          const dateLabel = L.date ? new Date(`${L.date}T00:00`).toLocaleDateString(loc, { weekday: "long", day: "numeric", month: "long" }) : "";
-          return {
-            text: fill(f.booked.say, {
-              first,
-              // "your free site visit" reads better than "your free Site visit"
-              mode: L.mode ? (lang === "en" ? f.mode.opts[L.mode].toLowerCase() : f.mode.opts[L.mode]) : "",
-              date: dateLabel,
-              slot: L.slot ? f.slot.opts[L.slot] : "",
-              district: L.district ?? "",
-            }),
-          };
-        }
-        case "skip": return { text: fill(f.skip.say, { first }) };
+  function baseLine(id: NodeId, how: "fwd" | "back" | "edit", L: Lead): { text: string; spoken?: string } {
+    const first = firstName(L.name);
+    switch (id) {
+      case "name": return { text: how === "edit" ? t.editAsk.name : t.askName };
+      case "mobile":
+        return { text: how === "fwd" ? fill(t.nameAck, { name: L.name, first }) : how === "edit" ? t.editAsk.mobile : t.ask.mobile };
+      case "otp":
+        return { text: fill(f.otp.ask, { mobile: displayMobile(L.mobile) }), spoken: fill(f.otp.ask, { mobile: spokenMobile(L.mobile) }) };
+      case "email": return { text: how === "fwd" ? f.otp.verifiedThenEmail : how === "edit" ? t.editAsk.email : t.ask.email };
+      case "emailOtp":
+        return { text: fill(f.emailOtp.ask, { email: L.email }), spoken: fill(f.emailOtp.ask, { email: spokenEmail(L.email, lang) }) };
+      case "review":
+        return {
+          text: t.confirmAsk,
+          spoken: fill(t.confirm, { name: L.name, mobile: spokenMobile(L.mobile), email: spokenEmail(L.email, lang) }),
+        };
+      case "pin": return { text: fill(f.pin.ask, { first }) };
+      case "region":
+        return { text: geoFound.current ? fill(f.pin.found, { district: L.district ?? "", state: L.state ?? "" }) : f.pin.notFound };
+      case "area": return { text: areas.length ? f.area.ask : f.area.askPlain };
+      case "own": return { text: f.own.ask };
+      case "ownerOk": return { text: f.ownerOk.ask };
+      case "ptype": return { text: f.ptype.ask };
+      case "roofType": return { text: f.roofType.ask };
+      case "bill": return { text: f.bill.ask };
+      case "billExact": return { text: f.bill.exactAsk };
+      case "roof": return { text: f.roof.ask };
+      case "goal": return { text: f.goal.ask };
+      case "cuts": return { text: f.cuts.ask };
+      case "when": return { text: f.when.ask };
+      case "pay": return { text: f.pay.ask };
+      case "calc": return { text: fill(f.calc.say, { first }) };
+      case "results": {
+        const e = computeEstimate(L.bill ?? 3000, L.roof ?? null, categoryOf(L), L.state === HOME_STATE);
+        const v = {
+          first,
+          kw: e.kw,
+          cost: spokenRupees(e.cost, lang),
+          subsidy: spokenRupees(e.subsidy, lang),
+          invest: spokenRupees(e.investment, lang),
+          monthly: spokenRupees(e.monthlySaving, lang),
+          life: spokenRupees(e.savings25, lang),
+          payback: Math.max(2, Math.round(e.paybackYears)),
+        };
+        return { text: fill(f.result.caption, { first }), spoken: fill(e.subsidy ? f.result.say : f.result.sayNoSub, v) };
       }
+      case "mode": return { text: f.mode.ask };
+      case "date": return { text: f.date.ask };
+      case "slot": return { text: f.slot.ask };
+      case "booked": {
+        const dateLabel = L.date ? new Date(`${L.date}T00:00`).toLocaleDateString(loc, { weekday: "long", day: "numeric", month: "long" }) : "";
+        return {
+          text: fill(f.booked.say, {
+            first,
+            // "your free site visit" reads better than "your free Site visit"
+            mode: L.mode ? (lang === "en" ? f.mode.opts[L.mode].toLowerCase() : f.mode.opts[L.mode]) : "",
+            date: dateLabel,
+            slot: L.slot ? f.slot.opts[L.slot] : "",
+            district: L.district ?? "",
+          }),
+        };
+      }
+      case "skip": return { text: fill(f.skip.say, { first }) };
+    }
+  }
+
+  // `L` defaults to the current answers; prefetching passes "what if" answers.
+  // `react` is Saathi's reaction to the previous answer, said first.
+  const lineFor = useCallback(
+    (id: NodeId, how: "fwd" | "back" | "edit", L: Lead = leadRef.current, react = ""): { text: string; spoken?: string } => {
+      const line = baseLine(id, how, L);
+      if (!react) return line;
+      return { text: `${react} ${line.text}`, spoken: line.spoken && `${react} ${line.spoken}` };
     },
+    // baseLine only reads the values listed here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [f, t, lang, loc, areas.length],
   );
 
-  const sendOtp = useCallback(async () => {
-    setResendAt(Date.now() + 30000);
-    await fetch("/api/otp/send", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mobile: leadRef.current.mobile }),
-    }).catch(() => {});
-  }, []);
+  // Load what Saathi will say after this step, for every possible answer.
+  const prefetchAfter = useCallback(
+    (id: NodeId) => {
+      const L = leadRef.current;
+      let variants: Lead[] = [];
+      const field = CHOICE_FIELD[id];
+      if (field) {
+        const opts = id === "slot" ? f.slot.opts : (f[id as "own"] as { opts: Record<string, string> }).opts;
+        variants = Object.keys(opts).map((v) => ({ ...L, [field]: v }));
+      } else if (id === "bill") variants = [{ ...L, bill: 3000 }, { ...L, bill: 1000 }];
+      else if (id === "roof") variants = [{ ...L, roof: 400 }, { ...L, roof: null }];
+      else if (id === "results") variants = [{ ...L, consult: "yes" }, { ...L, consult: "no" }];
+      else if (id === "review" || id === "emailOtp" || id === "area" || id === "date") variants = [L];
+      const seen = new Set<string>();
+      for (const v of variants) {
+        const nxt = nextNode(id, v, editing.current);
+        const steps: NodeId[] = nxt === "calc" ? ["calc", "results"] : [nxt];
+        for (const n of steps) {
+          const { text, spoken } = lineFor(n, "fwd", v, n === nxt ? reactionFor(id, v, f.react) : "");
+          const line = spoken ?? text;
+          if (seen.has(line)) continue;
+          seen.add(line);
+          voice.prefetch(line, lang);
+        }
+      }
+    },
+    [f, lang, lineFor],
+  );
 
   const goTo = useCallback(
-    (id: NodeId, how: "fwd" | "back" | "edit" = "fwd") => {
+    (id: NodeId, how: "fwd" | "back" | "edit" = "fwd", react = "") => {
       const from = nodeRef.current;
       if (how === "fwd" && from !== id && from !== "calc") history.current.push(from);
       nodeRef.current = id;
@@ -297,11 +361,9 @@ export function FlowScreen({
       setError(false);
       setPicked(undefined);
       setBusy(false);
+      setEmailFix(null);
       const L = leadRef.current;
-      if (id === "otp") {
-        setOtp("");
-        void sendOtp();
-      }
+      if (id === "otp" || id === "emailOtp") setOtp("");
       if (id === "region") setRegion({ state: L.state ?? "", district: L.district ?? "" });
       if (id === "bill") setBill(3000);
       if (id === "roof") setRoof(400);
@@ -313,12 +375,13 @@ export function FlowScreen({
         setMood("happy");
         setTimeout(() => setMood("idle"), 2500);
       }
-      const { text, spoken } = lineFor(id, how);
-      void say(text, spoken);
-      if (["name", "mobile", "email", "pin", "area", "billExact", "otp"].includes(id) && started.current)
+      const { text, spoken } = lineFor(id, how, L, react);
+      lastLine.current = say(text, spoken);
+      prefetchAfter(id);
+      if (["name", "mobile", "email", "pin", "area", "billExact", "otp", "emailOtp"].includes(id) && started.current)
         requestAnimationFrame(() => inputRef.current?.focus());
     },
-    [lineFor, say, sendOtp, setMood],
+    [lineFor, say, setMood, prefetchAfter],
   );
 
   // First question when the journey opens.
@@ -333,21 +396,44 @@ export function FlowScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // "Designing your plan" plays for a moment, then the results open.
+  // "Designing your plan" plays while Saathi finishes his line, then the
+  // results open.
   useEffect(() => {
     if (node !== "calc") return;
-    const id = setTimeout(() => {
+    let live = true;
+    const lineDone = lastLine.current.then(() => wait(600)); // a breath before the reveal
+    void Promise.all([wait(3200), Promise.race([lineDone, wait(15000)])]).then(() => {
+      if (!live || nodeRef.current !== "calc") return;
       setMood("idle");
       setBurst((b) => b + 1);
       sfx.success();
       goTo("results");
-    }, 3200);
-    return () => clearTimeout(id);
+    });
+    return () => {
+      live = false;
+    };
   }, [node, goTo, setMood]);
+
+  // While the user types their name or email, get Saathi's reply (which
+  // repeats it) ready, so it plays the moment they tap Next.
+  useEffect(() => {
+    if (node !== "name" && node !== "email" && node !== "mobile") return;
+    const id = setTimeout(() => {
+      const patch: Partial<Lead> =
+        node === "name" ? { name: tidyName(draft) } : node === "mobile" ? { mobile: cleanMobile(draft) } : { email: draft.trim().toLowerCase() };
+      const ok =
+        node === "name" ? isName(patch.name!) : node === "mobile" ? isMobile(patch.mobile!) && !isFakeMobile(patch.mobile!) : isEmail(patch.email!) && !emailTypo(patch.email!);
+      if (!ok) return;
+      const v = { ...leadRef.current, ...patch };
+      const { text, spoken } = lineFor(nextNode(node, v, editing.current), "fwd", v);
+      voice.prefetch(spoken ?? text, lang);
+    }, 400);
+    return () => clearTimeout(id);
+  }, [node, draft, lineFor, lang]);
 
   // OTP resend countdown.
   useEffect(() => {
-    if (node !== "otp") return;
+    if (node !== "otp" && node !== "emailOtp") return;
     const id = setInterval(() => setClock(Date.now()), 500);
     return () => clearInterval(id);
   }, [node]);
@@ -374,47 +460,86 @@ export function FlowScreen({
     const cur = nodeRef.current;
     const nxt = nextNode(cur, leadRef.current, editing.current);
     if (nxt === "review") editing.current = false;
-    goTo(nxt);
+    goTo(nxt, "fwd", reactionFor(cur, leadRef.current, f.react));
   };
 
   // ── step handlers ──
-  const submitText = async () => {
+  // `typed` replaces the field's text, e.g. when a suggestion chip is tapped.
+  const submitText = async (typed?: string) => {
     const id = nodeRef.current;
-    const raw = draft;
+    const raw = typed ?? draft;
     if (!raw.trim() && id !== "billExact") return;
     mic.stop();
     if (id === "name") {
-      const v = raw.trim().replace(/\s+/g, " ");
+      const v = tidyName(raw);
       return isName(v) ? advance({ name: v }) : fail(t.errName);
     }
     if (id === "mobile") {
-      const d = mobileDigits(raw);
+      const d = cleanMobile(raw);
       if (d.length !== 10) return d.length ? fail(fill(t.errMobileShort, { n: d.length })) : fail(t.ask.mobile);
       if (!/^[6-9]/.test(d)) return fail(t.errMobileStart);
-      return advance({ mobile: d, otpVerified: false });
+      if (isFakeMobile(d)) return fail(t.errMobileFake);
+      // Same number again soon after ("Change number" by mistake): the code
+      // already sent is still valid, so don't send another.
+      const last = codeSent.current.tel;
+      if (last && last.to === d && !last.used && stillValid(last.at)) return advance({ mobile: d, otpVerified: false, mobileProof: undefined });
+      // The server checks the number is a real mobile, then sends the SMS.
+      if (busy) return;
+      setMood("thinking");
+      const res = await sendCode("tel", d);
+      setMood("idle");
+      if (nodeRef.current !== "mobile") return;
+      if (!res.ok) return fail(sendError("tel", res), sendError("tel", res, true));
+      return advance({ mobile: d, otpVerified: false, mobileProof: undefined });
     }
     if (id === "email") {
       const v = raw.trim().toLowerCase();
-      return isEmail(v) ? advance({ email: v }) : fail(t.errEmail, t.errEmail.replace("name@gmail.com", spokenEmail("name@gmail.com", lang)));
+      if (!isEmail(v)) return fail(t.errEmail, t.errEmail.replace("name@gmail.com", spokenEmail("name@gmail.com", lang)));
+      // "rahul@gmial.com": ask once whether they meant gmail.com.
+      const fix = emailTypo(v);
+      if (fix && typoAsked.current !== v) {
+        typoAsked.current = v;
+        setEmailFix(fix);
+        sfx.tap();
+        const next = lineFor("emailOtp", "fwd", { ...leadRef.current, email: fix });
+        voice.prefetch(next.spoken ?? next.text, lang); // ready if they tap the suggestion
+        void say(fill(t.emailTypo, { email: fix }), fill(t.emailTypo, { email: spokenEmail(fix, lang) }));
+        return;
+      }
+      // Same address again soon after (e.g. "Change email" by mistake): the
+      // code already sent is still valid, so don't send another.
+      const last = codeSent.current.mail;
+      if (last && last.to === v && !last.used && stillValid(last.at)) {
+        return advance({ email: v, emailVerified: false, emailProof: undefined });
+      }
+      // The server checks the address can receive mail, then emails a code.
+      if (busy) return;
+      setMood("thinking");
+      const res = await sendCode("mail", v);
+      setMood("idle");
+      if (nodeRef.current !== "email") return;
+      if (!res.ok) return fail(sendError("mail", res), sendError("mail", res, true));
+      return advance({ email: v, emailVerified: false, emailProof: undefined });
     }
     if (id === "area") {
-      const v = raw.trim().replace(/\s+/g, " ");
-      return v.length >= 2 ? advance({ area: v }) : fail(f.area.err);
+      const v = raw.trim().replace(/\s+/g, " ").replace(/[.,।!?]+$/u, "");
+      return isArea(v) ? advance({ area: v }) : fail(f.area.err);
     }
     if (id === "billExact") {
       const n = Number(raw.replace(/\D/g, ""));
-      return n > 10000 && n <= 1000000 ? advance({ bill: n }) : fail(f.bill.exactErr);
+      return isExactBill(n) ? advance({ bill: n }) : fail(f.bill.exactErr);
     }
     if (id === "pin") {
+      if (busy) return;
       const pin = raw.replace(/\D/g, "");
-      if (!/^[1-9]\d{5}$/.test(pin)) return fail(f.pin.invalid);
+      if (!isPin(pin)) return fail(f.pin.invalid);
       setBusy(true);
       setMood("thinking");
       const res = await fetch(`/api/pincode?pin=${pin}`)
         .then((r) => r.json())
         .catch(() => ({ ok: false }));
-      if (nodeRef.current !== "pin") return;
       setMood("idle");
+      if (nodeRef.current !== "pin") return;
       let state = res.ok ? matchState(res.state) : undefined;
       if (!state && /^7[5-7]/.test(pin)) state = HOME_STATE; // Odisha PIN range
       const district = state && res.ok ? matchDistrict(state, res.district) : undefined;
@@ -426,23 +551,97 @@ export function FlowScreen({
     }
   };
 
-  const verifyOtp = async (code: string) => {
+  type SendRes = { ok: boolean; ticket?: string; resendAfter?: number; devCode?: string; error?: string; retryAfter?: number };
+
+  // Asks the server to text or email a code; keeps the signed ticket.
+  const sendCode = async (kind: CodeKind, to: string): Promise<SendRes> => {
     setBusy(true);
-    const res = await fetch("/api/otp/verify", {
+    const res: SendRes = await fetch(kind === "tel" ? "/api/otp/send" : "/api/email-otp/send", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mobile: leadRef.current.mobile, code }),
+      body: JSON.stringify(kind === "tel" ? { mobile: to } : { email: to, lang, name: leadRef.current.name }),
     })
       .then((r) => r.json())
-      .catch(() => ({ ok: false }));
-    if (nodeRef.current !== "otp") return;
+      .catch(() => ({ ok: false, error: "offline" }));
+    setBusy(false);
+    if (res.ok && res.ticket) {
+      codeTicket.current[kind] = res.ticket;
+      codeSent.current[kind] = { to, at: Date.now(), used: false };
+      setDevCode(res.devCode ?? null);
+      setResendAt(Date.now() + (res.resendAfter ?? 30) * 1000);
+    } else if (res.error === "wait" && res.retryAfter) setResendAt(Date.now() + res.retryAfter * 1000);
+    return res;
+  };
+
+  // What Saathi says when the number/email can't be used or no code went out.
+  const sendError = (kind: CodeKind, res: SendRes, spoken = false) => {
+    if (res.error === "offline") return f.netErr;
+    if (kind === "tel") {
+      const m = f.mobErr;
+      switch (res.error) {
+        case "fake": return t.errMobileFake;
+        case "invalid": return m.invalid;
+        case "wait": return fill(m.wait, { s: res.retryAfter ?? 30 });
+        case "limit": return m.limit;
+        default: return m.unavailable;
+      }
+    }
+    const e = f.emailErr;
+    switch (res.error) {
+      case "invalid": return spoken ? t.errEmail.replace("name@gmail.com", spokenEmail("name@gmail.com", lang)) : t.errEmail;
+      case "no_domain": return e.noDomain;
+      case "disposable": return e.disposable;
+      case "rejected": return e.rejected;
+      case "wait": return fill(e.wait, { s: res.retryAfter ?? 30 });
+      case "limit": return e.limit;
+      default: return e.unavailable;
+    }
+  };
+
+  const verifyCode = async (kind: CodeKind, code: string) => {
+    if (verifying.current) return;
+    verifying.current = true;
+    setBusy(true);
+    const to = kind === "tel" ? leadRef.current.mobile : leadRef.current.email;
+    const res: { ok?: boolean; proof?: string; error?: string } = await fetch(kind === "tel" ? "/api/otp/verify" : "/api/email-otp/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ [kind === "tel" ? "mobile" : "email"]: to, code, ticket: codeTicket.current[kind] }),
+    })
+      .then((r) => r.json())
+      .catch(() => ({ ok: false, error: "offline" }));
+    verifying.current = false;
+    if (nodeRef.current !== CODE_NODE[kind]) return;
     setBusy(false);
     if (res.ok) {
       sfx.success();
-      return advance({ otpVerified: true });
+      setDevCode(null);
+      const sent = codeSent.current[kind];
+      if (sent) sent.used = true;
+      return advance(kind === "tel" ? { otpVerified: true, mobileProof: res.proof } : { emailVerified: true, emailProof: res.proof });
     }
     setOtp("");
-    fail(f.otp.wrong);
+    const c = kind === "tel" ? f.otp : f.emailOtp;
+    if (res.error === "offline") return fail(f.netErr);
+    if (res.error === "wrong") return fail(c.wrong);
+    if (res.error === "unavailable" || res.error === "limit") return fail(sendError(kind, { ok: false, error: res.error }));
+    // Expired, too many tries or an old ticket: send a fresh code right away.
+    const again = await sendCode(kind, to);
+    if (nodeRef.current !== CODE_NODE[kind]) return;
+    if (!again.ok) return fail(sendError(kind, again), sendError(kind, again, true));
+    if (res.error === "expired") void say(c.expired);
+    else fail(c.tooMany);
+  };
+
+  const resendCode = async (kind: CodeKind) => {
+    setOtp("");
+    setError(false);
+    const res = await sendCode(kind, kind === "tel" ? leadRef.current.mobile : leadRef.current.email);
+    if (nodeRef.current !== CODE_NODE[kind]) return;
+    if (res.ok) {
+      sfx.pop();
+      void say(kind === "tel" ? f.otp.resent : f.emailOtp.resent);
+    } else fail(sendError(kind, res), sendError(kind, res, true));
   };
 
   const pick = (field: keyof Lead, id: string) => {
@@ -456,10 +655,14 @@ export function FlowScreen({
     voice.stop();
     mic.stop();
     sfx.tap();
-    const prev = history.current.pop();
+    let prev = history.current.pop();
+    // A code can't be entered twice: going back skips to the number/email.
+    const skipped = prev === "otp" || prev === "emailOtp" ? prev : null;
+    if (skipped) prev = history.current.pop();
     if (!prev) return onExit();
     const cleared: Partial<Lead> = {};
-    for (const k of [...(CLEARS[nodeRef.current] ?? []), ...(CLEARS[prev] ?? [])]) (cleared as Record<string, undefined>)[k] = undefined;
+    for (const k of [...(CLEARS[nodeRef.current] ?? []), ...(skipped ? (CLEARS[skipped] ?? []) : []), ...(CLEARS[prev] ?? [])])
+      (cleared as Record<string, undefined>)[k] = undefined;
     if (prev === "name" || prev === "mobile" || prev === "email") (cleared as Record<string, string>)[prev] = "";
     if (prev === "pin") geoFound.current = false;
     editing.current = false;
@@ -529,7 +732,6 @@ export function FlowScreen({
     cuts: { field: "cuts", options: opts(f.cuts), en: FLOW.en.cuts.opts },
     when: { field: "when", options: opts(f.when), en: FLOW.en.when.opts },
     pay: { field: "pay", options: opts(f.pay), en: FLOW.en.pay.opts },
-    consult: { field: "consult", options: opts(f.consult), en: FLOW.en.consult.opts },
     mode: { field: "mode", options: opts(f.mode), en: FLOW.en.mode.opts, cols: 1 },
   };
   const choice = choiceFor[node];
@@ -626,10 +828,11 @@ export function FlowScreen({
                 inputRef={inputRef}
                 icon={conf.icon}
                 prefix={node === "mobile" ? "+91" : node === "billExact" ? "₹" : undefined}
-                value={draft}
+                value={node === "billExact" && draft ? Number(draft).toLocaleString("en-IN") : draft}
                 error={error}
                 onChange={(e) => {
                   setError(false);
+                  setEmailFix(null);
                   setDraft(clean(e.target.value));
                 }}
                 placeholder={mic.listening ? t.listening : conf.ph}
@@ -644,7 +847,23 @@ export function FlowScreen({
                 }
                 {...conf.props}
               />
-              {suggest.length > 0 && (
+              {node === "email" && emailFix && (
+                <div className="pt-2.5" lang="en">
+                  <Chip
+                    on
+                    onClick={() => {
+                      // Same path as typing it: check the address, then email the code.
+                      const fix = emailFix;
+                      setEmailFix(null);
+                      setDraft(fix);
+                      void submitText(fix);
+                    }}
+                  >
+                    ✓ {emailFix}
+                  </Chip>
+                </div>
+              )}
+              {!emailFix && suggest.length > 0 && (
                 <div className="flex gap-2 overflow-x-auto pt-2.5" lang="en">
                   {suggest.map((s) => (
                     <Chip key={s} onClick={() => setDraft(s)}>
@@ -653,7 +872,7 @@ export function FlowScreen({
                   ))}
                 </div>
               )}
-              <Busy show={busy}>{f.pin.looking}</Busy>
+              <Busy show={busy}>{node === "email" ? f.emailOtp.sending : node === "mobile" ? f.otp.sending : f.pin.looking}</Busy>
               <div className="mt-3">
                 <PrimaryButton type="submit" disabled={!draft.trim() || busy}>
                   <NextLabel label={f.next} />
@@ -666,6 +885,10 @@ export function FlowScreen({
       case "otp":
         return (
           <AnswerCard label={label}>
+            <p className="mb-2.5 flex items-center justify-center gap-1.5 text-[15px] font-semibold text-white/90" lang="en">
+              <IconPhone className="h-4 w-4 shrink-0 text-brand" />
+              {displayMobile(lead.mobile)}
+            </p>
             <div ref={scope}>
               <OtpBoxes
                 inputRef={inputRef}
@@ -673,31 +896,69 @@ export function FlowScreen({
                 error={error}
                 label={f.otp.label}
                 onChange={(v) => {
+                  if (busy) return; // a code is being checked
                   setError(false);
                   setOtp(v);
-                  if (v.length === 6) void verifyOtp(v);
+                  if (v.length === 6) void verifyCode("tel", v);
                 }}
               />
             </div>
-            <p className="mt-2.5 flex items-center justify-center gap-1.5 rounded-xl bg-gold/10 py-2 text-[12.5px] font-semibold text-gold">
-              <IconKey className="h-4 w-4" />
-              {f.otp.demo}
-            </p>
-            <Busy show={busy}>{f.otp.verify}…</Busy>
+            {devCode ? (
+              <p className="mt-2.5 flex items-center justify-center gap-1.5 rounded-xl bg-gold/10 py-2 text-[12.5px] font-semibold text-gold">
+                <IconKey className="h-4 w-4" />
+                {fill(f.otp.dev, { code: devCode })}
+              </p>
+            ) : (
+              <p className="mt-2.5 text-center text-[12.5px] text-ink-3">{f.otp.hint}</p>
+            )}
+            <Busy show={busy}>{otp.length === 6 ? `${f.otp.verify}…` : f.otp.sending}</Busy>
             <div className="mt-3 flex items-center justify-between text-[13px] font-semibold">
               <button onClick={back} className="flex items-center gap-1 text-white/70 hover:text-white">
                 <IconEdit className="h-3.5 w-3.5" />
                 {f.otp.change}
               </button>
-              <button
-                disabled={resendLeft > 0}
-                onClick={() => {
-                  void sendOtp();
-                  setOtp("");
-                  void say(f.otp.resent);
+              <button disabled={resendLeft > 0 || busy} onClick={() => void resendCode("tel")} className="text-brand disabled:text-ink-3">
+                {resendLeft > 0 ? fill(f.otp.resendIn, { s: resendLeft }) : f.otp.resend}
+              </button>
+            </div>
+          </AnswerCard>
+        );
+      case "emailOtp":
+        return (
+          <AnswerCard label={label}>
+            <p className="mb-2.5 flex items-center justify-center gap-1.5 text-[14px] font-semibold [overflow-wrap:anywhere] text-white/90" lang="en">
+              <IconMail className="h-4 w-4 shrink-0 text-brand" />
+              {lead.email}
+            </p>
+            <div ref={scope}>
+              <OtpBoxes
+                inputRef={inputRef}
+                value={otp}
+                error={error}
+                label={f.emailOtp.label}
+                onChange={(v) => {
+                  if (busy) return; // a code is being checked or sent
+                  setError(false);
+                  setOtp(v);
+                  if (v.length === 6) void verifyCode("mail", v);
                 }}
-                className="text-brand disabled:text-ink-3"
-              >
+              />
+            </div>
+            {devCode ? (
+              <p className="mt-2.5 flex items-center justify-center gap-1.5 rounded-xl bg-gold/10 py-2 text-[12.5px] font-semibold text-gold">
+                <IconKey className="h-4 w-4" />
+                {fill(f.emailOtp.dev, { code: devCode })}
+              </p>
+            ) : (
+              <p className="mt-2.5 text-center text-[12.5px] text-ink-3">{f.emailOtp.spam}</p>
+            )}
+            <Busy show={busy}>{otp.length === 6 ? `${f.otp.verify}…` : f.emailOtp.sending}</Busy>
+            <div className="mt-3 flex items-center justify-between text-[13px] font-semibold">
+              <button onClick={back} className="flex items-center gap-1 text-white/70 hover:text-white">
+                <IconEdit className="h-3.5 w-3.5" />
+                {f.emailOtp.change}
+              </button>
+              <button disabled={resendLeft > 0 || busy} onClick={() => void resendCode("mail")} className="text-brand disabled:text-ink-3">
                 {resendLeft > 0 ? fill(f.otp.resendIn, { s: resendLeft }) : f.otp.resend}
               </button>
             </div>
@@ -716,7 +977,7 @@ export function FlowScreen({
                     <span className="block text-[11px] font-semibold text-ink-3">{t.labels[k]}</span>
                     <span className="flex items-center gap-1.5 text-[15.5px] font-semibold [overflow-wrap:anywhere] text-white" lang={k === "name" ? undefined : "en"}>
                       {k === "mobile" ? displayMobile(lead.mobile) : lead[k]}
-                      {k === "mobile" && lead.otpVerified && (
+                      {((k === "mobile" && lead.otpVerified) || (k === "email" && lead.emailVerified)) && (
                         <span className="flex items-center gap-0.5 rounded-full bg-brand/15 px-1.5 py-0.5 text-[10.5px] text-mint">
                           <IconCheck className="h-3 w-3" />
                           {f.otp.verified}
@@ -823,7 +1084,7 @@ export function FlowScreen({
       case "results":
         return estimate ? (
           <AnswerCard>
-            <ResultsCard lang={lang} est={estimate} lead={lead} onBook={() => advance({})} />
+            <ResultsCard lang={lang} est={estimate} lead={lead} onBook={() => advance({ consult: "yes" })} onLater={() => advance({ consult: "no" })} />
           </AnswerCard>
         ) : null;
       case "date":
