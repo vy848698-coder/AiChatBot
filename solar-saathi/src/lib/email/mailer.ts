@@ -1,4 +1,4 @@
-// Server only: sends the verification email over SMTP.
+// Server only: sends email over SMTP (verification codes, lead reports).
 //
 // Works with any SMTP service; set in .env.local:
 //   Gmail (free, 500 recipients/day): SMTP_USER=you@gmail.com, SMTP_PASS=<16-char app password>
@@ -63,17 +63,21 @@ async function transport(): Promise<Cached> {
 
 export type SendResult = { ok: true; preview?: string } | { ok: false; reason: "rejected" | "config" | "unavailable" };
 
-export async function sendCodeEmail(to: string, code: string, lang: Lang, name: string): Promise<SendResult> {
-  const mail = codeEmail(code, lang, name);
+export const sendCodeEmail = (to: string, code: string, lang: Lang, name: string) => sendMail({ to, ...codeEmail(code, lang, name) });
+
+// Any email through the configured SMTP (used for the code and lead emails).
+export async function sendMail(mail: { to: string | string[]; subject: string; html: string; text: string; replyTo?: string }): Promise<SendResult> {
+  const to = Array.isArray(mail.to) ? mail.to.join(", ") : mail.to;
   try {
     const { transport: t, from } = await transport();
     const info = await t.sendMail({
       from,
       to,
+      replyTo: mail.replyTo,
       subject: mail.subject,
       text: mail.text,
       html: mail.html,
-      headers: { "X-Entity-Ref-ID": `${Date.now()}` }, // stops Gmail threading every code into one conversation
+      headers: { "X-Entity-Ref-ID": `${Date.now()}` }, // stops Gmail threading every email into one conversation
     });
     if (info.rejected?.length) return { ok: false, reason: "rejected" };
     const preview = mailMode() === "ethereal" ? nodemailer.getTestMessageUrl(info) || undefined : undefined;

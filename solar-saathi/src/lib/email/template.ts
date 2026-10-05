@@ -3,6 +3,7 @@
 // gradient (Outlook ignores gradients), no images (often blocked), and a plain
 // text version alongside. Phone numbers match the expert sheet in the app.
 
+import { PHONE, TOLL_FREE } from "../contact";
 import type { Lang } from "../i18n";
 
 type Copy = {
@@ -77,8 +78,6 @@ const COPY: Record<Lang, Copy> = {
   },
 };
 
-const PHONE = { tel: "+919124165341", show: "+91 91241 65341" };
-const TOLL_FREE = { tel: "18008913731", show: "1800 891 3731" };
 const SITE = "https://clansmachina.com";
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);

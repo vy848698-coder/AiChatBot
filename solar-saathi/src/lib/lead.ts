@@ -1,3 +1,4 @@
+import type { Category } from "./estimate";
 import type { Lang } from "./i18n";
 
 // Everything Saathi collects. Matches the client brief (PDF sections 1–3) and
@@ -27,7 +28,7 @@ export type Lead = {
   when?: "now" | "d15" | "d30" | "later";
   pay?: "full" | "bank" | "emi" | "guide";
   // 3. consultation
-  consult?: "yes" | "no";
+  consult?: "yes";
   mode?: "call" | "visit" | "online";
   date?: string; // YYYY-MM-DD
   slot?: "s1" | "s2" | "s3" | "s4";
@@ -39,8 +40,16 @@ export type Lead = {
 
 export const EMPTY_LEAD: Lead = { name: "", mobile: "", email: "" };
 
+// Calculator category: a flat on the society roof counts as a housing society;
+// shops and factories get no residential subsidy.
+export function categoryOf(l: Lead): Category {
+  if (l.ptype === "commercial" || l.ptype === "industrial") return "commercial";
+  if (l.ptype === "flat" && l.roofType === "society") return "society";
+  return "residential";
+}
+
 // CRM lead score (PDF section 6): Hot ≥ 70, Warm 40–69, Cold < 40.
-export function scoreLead(l: Lead) {
+export function scoreLead(l: Lead): { score: number; temperature: "Hot" | "Warm" | "Cold" } {
   let s = 0;
   if (l.otpVerified) s += 10;
   if (l.emailVerified) s += 5;

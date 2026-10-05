@@ -2,18 +2,19 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { AnimatePresence, motion, useAnimate } from "motion/react";
-import { computeEstimate, rupees, type Category } from "@/lib/estimate";
+import { computeEstimate, rupees } from "@/lib/estimate";
 import { FAQ, matchFaq } from "@/lib/faq";
 import { FLOW, type FlowCopy } from "@/lib/flowCopy";
 import { STRINGS, fill, type Lang } from "@/lib/i18n";
-import { EMPTY_LEAD, saveLead, type Lead } from "@/lib/lead";
+import { categoryOf, EMPTY_LEAD, saveLead, type Lead } from "@/lib/lead";
+import { whatsAppText } from "@/lib/leadMessage";
 import { HOME_STATE, matchDistrict, matchState } from "@/lib/regions";
 import { sfx } from "@/lib/sfx";
 import { displayMobile, spokenEmail, spokenMobile, spokenRupees } from "@/lib/speech";
 import { useSpeechInput } from "@/lib/useSpeechInput";
-import { cleanMobile, emailTypo, firstName, isArea, isEmail, isExactBill, isFakeMobile, isMobile, isName, isPin, tidyName } from "@/lib/validate";
+import { cleanMobile, emailTypo, firstName, isArea, isEmail, isExactBill, isFakeMobile, isMobile, isName, isPin, NAME_MAX, nameProblem, tidyName } from "@/lib/validate";
 import { voice } from "@/lib/voice";
-import { BookedCard, ExpertSheet, ResultsCard, SavedCard } from "../flow/Cards";
+import { BookedCard, ExpertSheet, ResultsCard } from "../flow/Cards";
 import { FaqCard, type FaqView } from "../flow/Faq";
 import { Busy, Chip, ChoiceGrid, DateChips, FieldInput, NextLabel, OtpBoxes, PrimaryButton, RangeSlider, RegionSelect, type DayOpt, type Option } from "../flow/Widgets";
 import type { MascotMood } from "../mascot/Mascot";
@@ -29,7 +30,7 @@ type NodeId =
   | "pin" | "region" | "area"
   | "own" | "ownerOk" | "ptype" | "roofType" | "bill" | "billExact" | "roof" | "goal" | "cuts" | "when" | "pay"
   | "calc" | "results"
-  | "mode" | "date" | "slot" | "booked" | "skip"
+  | "mode" | "date" | "slot" | "booked"
   | "faq";
 
 const SECTION: Record<NodeId, number> = {
@@ -37,7 +38,7 @@ const SECTION: Record<NodeId, number> = {
   pin: 1, region: 1, area: 1,
   own: 2, ownerOk: 2, ptype: 2, roofType: 2, bill: 2, billExact: 2, roof: 2, goal: 2, cuts: 2, when: 2, pay: 2,
   calc: 3, results: 3,
-  mode: 4, date: 4, slot: 4, booked: 4, skip: 4,
+  mode: 4, date: 4, slot: 4, booked: 4,
   faq: 4,
 };
 
@@ -95,7 +96,7 @@ function nextNode(id: NodeId, l: Lead, editing: boolean): NodeId {
     case "when": return "pay";
     case "pay": return "calc";
     case "calc": return "results";
-    case "results": return l.consult === "yes" ? "mode" : "skip";
+    case "results": return "mode";
     case "mode": return "date";
     case "date": return "slot";
     default: return "booked";
@@ -111,12 +112,6 @@ const CLEARS: Partial<Record<NodeId, (keyof Lead)[]>> = {
   bill: ["bill"], billExact: ["bill"], roof: ["roof"], goal: ["goal", "cuts"], cuts: ["cuts"], when: ["when"], pay: ["pay"],
   mode: ["mode", "consult"], date: ["date"], slot: ["slot", "bookingId"],
 };
-
-function categoryOf(l: Lead): Category {
-  if (l.ptype === "commercial" || l.ptype === "industrial") return "commercial";
-  if (l.ptype === "flat" && l.roofType === "society") return "society";
-  return "residential";
-}
 
 // Saathi's reaction to the answer just given; said before the next question.
 function reactionFor(id: NodeId, l: Lead, r: FlowCopy["react"]): string {
@@ -319,7 +314,11 @@ export function FlowScreen({
           life: spokenRupees(e.savings25, lang),
           payback: Math.max(2, Math.round(e.paybackYears)),
         };
-        return { text: fill(f.result.caption, { first }), spoken: fill(e.subsidy ? f.result.say : f.result.sayNoSub, v) };
+        // Ends with the two ways forward: book now, or ask in the FAQ first.
+        return {
+          text: `${fill(f.result.caption, { first })} ${f.result.next}`,
+          spoken: `${fill(e.subsidy ? f.result.say : f.result.sayNoSub, v)} ${f.result.next}`,
+        };
       }
       case "mode": return { text: f.mode.ask };
       case "date": return { text: f.date.ask };
@@ -336,8 +335,7 @@ export function FlowScreen({
         });
         return { text: `${said} ${FAQ[lang].hub.say}` };
       }
-      case "skip": return { text: `${fill(f.skip.say, { first })} ${FAQ[lang].hub.say}` };
-      case "faq": return { text: FAQ[lang].ui.intro };
+      case "faq": return { text: faqLine(faqViewRef.current, lang) }; // the screen it reopens on
     }
   }
 
@@ -365,7 +363,7 @@ export function FlowScreen({
         variants = Object.keys(opts).map((v) => ({ ...L, [field]: v }));
       } else if (id === "bill") variants = [{ ...L, bill: 3000 }, { ...L, bill: 1000 }];
       else if (id === "roof") variants = [{ ...L, roof: 400 }, { ...L, roof: null }];
-      else if (id === "results") variants = [{ ...L, consult: "yes" }, { ...L, consult: "no" }];
+      else if (id === "results") variants = [{ ...L, consult: "yes" }];
       else if (id === "review" || id === "emailOtp" || id === "area" || id === "date") variants = [L];
       const seen = new Set<string>();
       for (const v of variants) {
@@ -382,6 +380,23 @@ export function FlowScreen({
     },
     [f, lang, lineFor],
   );
+
+  // The owner's WhatsApp alert (api/lead → CallMeBot): when the plan is shown
+  // and when a consultation is booked. In the background; never blocks the
+  // customer. Sent again only if the answers changed since the last one.
+  const alerted = useRef<Partial<Record<"plan" | "booked", string>>>({});
+  const alertOwner = (stage: "plan" | "booked") => {
+    const L = leadRef.current;
+    const sig = JSON.stringify(L);
+    if (alerted.current[stage] === sig) return;
+    alerted.current[stage] = sig;
+    void fetch("/api/lead", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ stage, lead: L, lang }),
+      keepalive: true, // still delivered if the customer closes the tab right away
+    }).catch(() => {});
+  };
 
   const goTo = useCallback(
     (id: NodeId, how: "fwd" | "back" | "edit" = "fwd", react = "") => {
@@ -410,9 +425,13 @@ export function FlowScreen({
       const { text, spoken } = lineFor(id, how, L, react);
       lastLine.current = say(text, spoken);
       prefetchAfter(id);
+      if (id === "results") alertOwner("plan");
+      if (id === "booked") alertOwner("booked");
       if (["name", "mobile", "email", "pin", "area", "billExact", "otp", "emailOtp"].includes(id) && started.current)
         requestAnimationFrame(() => inputRef.current?.focus());
     },
+    // alertOwner only reads refs and `lang`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [lineFor, say, setMood, prefetchAfter],
   );
 
@@ -504,7 +523,9 @@ export function FlowScreen({
     mic.stop();
     if (id === "name") {
       const v = tidyName(raw);
-      return isName(v) ? advance({ name: v }) : fail(t.errName);
+      const problem = nameProblem(v);
+      if (!problem) return advance({ name: v });
+      return fail(problem === "long" ? t.errNameLong : problem === "junk" ? t.errNameJunk : t.errName);
     }
     if (id === "mobile") {
       const d = cleanMobile(raw);
@@ -750,6 +771,14 @@ export function FlowScreen({
     showFaq(m.kind === "suggest" ? { kind: "suggest", ids: m.ids, asked: q } : { kind: "none", asked: q });
   };
 
+  // From the FAQ (opened on the plan, before booking): straight to booking.
+  const bookFromFaq = () => {
+    sfx.select();
+    flashHappy();
+    update({ consult: "yes" });
+    goTo("mode");
+  };
+
   const pickQuestion = (id: string) => {
     sfx.select();
     noteQuestion(FAQ.en.items[id].q);
@@ -824,26 +853,14 @@ export function FlowScreen({
       .map((s) => ({ id: s, label: f.slot.opts[s], icon: "🕒" }));
   }, [lead.date, days, f]);
 
-  const summary = useMemo(() => {
-    const L = lead;
-    return [
-      `Hi Clans Machina, I'm ${L.name || "a customer"}${L.mobile ? ` (${displayMobile(L.mobile)})` : ""}.`,
-      L.district ? `Location: ${[L.area, L.district, L.state, L.pin].filter(Boolean).join(", ")}.` : "",
-      L.bill ? `Monthly bill: ${rupees(L.bill)}.` : "",
-      L.ptype ? `Property: ${FLOW.en.ptype.opts[L.ptype]}.` : "",
-      L.bookingId && L.mode && L.slot ? `Booked: free ${FLOW.en.mode.opts[L.mode].toLowerCase()} on ${L.date}, ${FLOW.en.slot.opts[L.slot]} (ID ${L.bookingId}).` : "",
-      L.faq?.length ? `My questions: ${L.faq.slice(-5).join(" | ")}.` : "",
-      "I'd like to know more about rooftop solar.",
-    ]
-      .filter(Boolean)
-      .join(" ");
-  }, [lead]);
+  // Everything the customer answered, ready in the WhatsApp chat they open.
+  const summary = useMemo(() => whatsAppText(lead, lang), [lead, lang]);
 
   const step = STEP[node];
   const label = step ? `${step[0]} / ${step[1]}` : undefined;
   const section = SECTION[node];
   const progress = step ? (step[0] - 1) / step[1] + (picked ? 1 / step[1] : 0) : node === "results" || node === "calc" ? 0.5 : 1;
-  const tall = ["results", "booked", "skip", "faq", "review", "date", "region"].includes(node);
+  const tall = ["results", "booked", "faq", "review", "date", "region"].includes(node);
   const resendLeft = Math.max(0, Math.ceil((resendAt - clock) / 1000));
   const iconCls = "h-5 w-5";
 
@@ -876,7 +893,7 @@ export function FlowScreen({
       case "pin":
       case "billExact": {
         const conf = {
-          name: { icon: <IconUser className={iconCls} />, ph: t.placeholders.name, props: { autoComplete: "name", autoCapitalize: "words", maxLength: 60 } },
+          name: { icon: <IconUser className={iconCls} />, ph: t.placeholders.name, props: { autoComplete: "name", autoCapitalize: "words", maxLength: NAME_MAX + 1 } }, // +1: an over-long name is flagged, never silently cut
           mobile: { icon: <IconPhone className={iconCls} />, ph: t.placeholders.mobile, props: { type: "tel", inputMode: "numeric" as const, autoComplete: "tel-national", lang: "en" } },
           email: { icon: <IconMail className={iconCls} />, ph: t.placeholders.email, props: { type: "email", inputMode: "email" as const, autoComplete: "email", autoCapitalize: "none", spellCheck: false, lang: "en", maxLength: 80 } },
           area: { icon: <IconPin className={iconCls} />, ph: f.area.placeholder, props: { autoComplete: "address-level3", maxLength: 80 } },
@@ -1008,9 +1025,11 @@ export function FlowScreen({
       case "emailOtp":
         return (
           <AnswerCard label={label}>
-            <p className="mb-2.5 flex items-center justify-center gap-1.5 text-[14px] font-semibold [overflow-wrap:anywhere] text-white/90" lang="en">
+            <p className="mb-2.5 flex items-center justify-center gap-1.5 text-center text-[14px] font-semibold break-words text-white/90" lang="en">
               <IconMail className="h-4 w-4 shrink-0 text-brand" />
-              {lead.email}
+              <span className="min-w-0">
+                <EmailText email={lead.email} />
+              </span>
             </p>
             <div ref={scope}>
               <OtpBoxes
@@ -1056,20 +1075,28 @@ export function FlowScreen({
                     {k === "name" ? <IconUser className={iconCls} /> : k === "mobile" ? <IconPhone className={iconCls} /> : <IconMail className={iconCls} />}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block text-[11px] font-semibold text-ink-3">{t.labels[k]}</span>
-                    <span className="flex items-center gap-1.5 text-[15.5px] font-semibold [overflow-wrap:anywhere] text-white" lang={k === "name" ? undefined : "en"}>
-                      {k === "mobile" ? displayMobile(lead.mobile) : lead[k]}
+                    {/* The badge sits by the label, so the value keeps the full width on a phone. */}
+                    <span className="flex items-center gap-1.5 text-[11px] font-semibold text-ink-3">
+                      {t.labels[k]}
                       {((k === "mobile" && lead.otpVerified) || (k === "email" && lead.emailVerified)) && (
-                        <span className="flex items-center gap-0.5 rounded-full bg-brand/15 px-1.5 py-0.5 text-[10.5px] text-mint">
+                        <span className="flex shrink-0 items-center gap-0.5 rounded-full bg-brand/15 px-1.5 py-px text-[10.5px] whitespace-nowrap text-mint">
                           <IconCheck className="h-3 w-3" />
                           {f.otp.verified}
                         </span>
                       )}
                     </span>
+                    <span className={`mt-0.5 block leading-snug font-semibold break-words text-white ${k === "email" ? "text-[14.5px]" : "text-[15.5px]"}`} lang={k === "name" ? undefined : "en"}>
+                      {k === "mobile" ? displayMobile(lead.mobile) : k === "email" ? <EmailText email={lead.email} /> : lead.name}
+                    </span>
                   </span>
-                  <button onClick={() => editField(k)} className="flex items-center gap-1 rounded-full px-2 py-1.5 text-[12.5px] font-semibold text-brand hover:bg-brand/10">
-                    <IconEdit className="h-3.5 w-3.5" />
-                    {t.edit}
+                  {/* Icon only on narrow phones, so the value gets the width. */}
+                  <button
+                    onClick={() => editField(k)}
+                    aria-label={`${t.edit} ${t.labels[k]}`}
+                    className="flex shrink-0 items-center gap-1 rounded-full p-2 text-[12.5px] font-semibold whitespace-nowrap text-brand hover:bg-brand/10 min-[400px]:px-2.5 min-[400px]:py-1.5"
+                  >
+                    <IconEdit className="h-4 w-4 min-[400px]:h-3.5 min-[400px]:w-3.5" />
+                    <span className="hidden min-[400px]:inline">{t.edit}</span>
                   </button>
                 </li>
               ))}
@@ -1166,7 +1193,7 @@ export function FlowScreen({
       case "results":
         return estimate ? (
           <AnswerCard>
-            <ResultsCard lang={lang} est={estimate} lead={lead} onBook={() => advance({ consult: "yes" })} onLater={() => advance({ consult: "no" })} />
+            <ResultsCard lang={lang} est={estimate} lead={lead} onBook={() => advance({ consult: "yes" })} onFaq={openFaq} summary={summary} />
           </AnswerCard>
         ) : null;
       case "date":
@@ -1205,12 +1232,6 @@ export function FlowScreen({
             />
           </AnswerCard>
         );
-      case "skip":
-        return (
-          <AnswerCard>
-            <SavedCard lang={lang} onFaq={openFaq} summary={summary} />
-          </AnswerCard>
-        );
       case "faq":
         return (
           <AnswerCard>
@@ -1230,6 +1251,8 @@ export function FlowScreen({
                 showFaq({ kind: "home" });
               }}
               onExpert={() => setExpert(true)}
+              onBook={lead.bookingId ? undefined : bookFromFaq}
+              bookLabel={f.result.cta}
               inputRef={inputRef}
               mic={{
                 supported: mic.supported,
@@ -1283,6 +1306,24 @@ export function FlowScreen({
       </div>
       <ExpertSheet open={expert} onClose={() => setExpert(false)} lang={lang} lead={lead} summary={summary} />
     </div>
+  );
+}
+
+// An email that wraps on a narrow screen only after a dot in the name part or
+// before "@" ("rahul.mohanty." / "bhubaneswar" / "@gmail.com"), never in the
+// middle of a word or inside the domain.
+function EmailText({ email }: { email: string }) {
+  const at = email.lastIndexOf("@");
+  const parts = at < 0 ? [email] : [...email.slice(0, at).split(/(?<=\.)/), email.slice(at)];
+  return (
+    <>
+      {parts.map((p, i) => (
+        <span key={i}>
+          {i > 0 && <wbr />}
+          {p}
+        </span>
+      ))}
+    </>
   );
 }
 

@@ -23,8 +23,8 @@ The whole customer journey from the client brief (PDF §1–5), with Saathi (a 3
 | 2 · Location | PIN code → state & district **auto-filled from India Post** (editable) → area (chips from the PIN, or typed) |
 | 3 · Your home | Own/rented (→ owner's permission) · property type (flat → own terrace or society roof) · monthly bill slider ₹500–₹10,000 (or exact amount above) · roof space (or "not sure") · goal (backup → daily power cuts) · install timing · payment |
 | 4 · Your plan | Client's calculator (`lib/estimate.ts`, same numbers as clansmachina.com): kW, panels, cost, central + Odisha subsidy, investment, monthly & 25-year savings, payback, EMI (bank/EMI), CO₂ |
-| 5 · Book | "Book my free consultation" on the plan → phone / site visit / online → date (Mon–Sat) → time slot → confirmation (booking ID, district team) — or "Maybe later" → plan saved |
-| 6 · FAQ | After the booking (or saved plan): **"Have more questions?"** → **Ask Saathi · Solar FAQ**, Call, WhatsApp, Callback. The FAQ has the PDF's 7 topics (basics, subsidy, savings, finance, installation, net metering, warranty & care) with 38 questions. Saathi **speaks each answer**, and the card shows one **key fact** (e.g. "Up to ₹1,38,000 in Odisha") plus related questions. Customers can also **type or speak their own question** in any of the 3 languages. If nothing matches, Saathi says so and offers the expert |
+| 5 · Book | "Book my free consultation" on the plan → phone / site visit / online → date (Mon–Sat) → time slot → confirmation (booking ID, district team) — or **"Have questions? Ask Saathi first"** → the FAQ, which has its own "Book my free consultation" button (Back from booking returns to the FAQ) |
+| 6 · FAQ | From the plan (before booking) or after the booking (**"Have more questions?"**): **Ask Saathi · Solar FAQ**, Call, WhatsApp, Callback. The FAQ has the PDF's 7 topics (basics, subsidy, savings, finance, installation, net metering, warranty & care) with 38 questions. Saathi **speaks each answer**, and the card shows one **key fact** (e.g. "Up to ₹1,38,000 in Odisha") plus related questions. Customers can also **type or speak their own question** in any of the 3 languages. If nothing matches, Saathi says so and offers the expert |
 | Always | **Talk to an Expert** (call, WhatsApp with the customer's details, callback, toll-free) · Back = previous question with its answer cleared |
 
 Saathi reacts to every answer before the next question (e.g. the subsidy goal → "In Odisha you can get up to ₹1,38,000"), using only figures from the client's calculator.
@@ -32,6 +32,18 @@ Saathi reacts to every answer before the next question (e.g. the subsidy goal �
 **Input checks** (`lib/validate.ts`): names (letters only, no "aaaa"), mobile (10 digits, starts 6–9, rejects 9999999999 / 9876543210), email (strict format + common domain typos), PIN (6 digits, starts 1–8), area (real words), exact bill (₹10,001–₹10,00,000). Each failure gets a specific spoken message.
 
 Every answer is saved as one lead (`lib/lead.ts`) with a **Hot / Warm / Cold** score, ready for Zoho Bigin. FAQ questions asked are saved on the lead (`faq`) and go into the WhatsApp message, so the agent doesn't have to ask again.
+
+## Lead data on WhatsApp
+
+Everything the customer answers (details, location, home, plan, booking; not the FAQ) is saved on their device as they go (`lib/lead.ts`) and reaches WhatsApp two ways (`lib/leadMessage.ts` builds one report that every message is drawn from):
+
+| Way | When | Setting |
+|---|---|---|
+| **Customer taps WhatsApp** (after booking, or Talk to an expert) | Their WhatsApp opens with all their details typed in; they tap Send | `WHATSAPP_NUMBER` in `src/lib/contact.ts` (your number to test, then the client's) |
+| **Owner email** (automatic, free via the Gmail SMTP above) | Same two moments, as a designed report: Hot/Warm/Cold, one-tap Call / WhatsApp / Email, key numbers, then numbered sections (customer → location → home → plan → consultation). Replying writes to the customer | `LEAD_EMAIL_TO` in `.env.local` / Vercel, or the default address in `src/lib/email/leadEmail.ts` |
+| **Owner alert** (automatic, free via CallMeBot) | When the plan is shown ("New solar lead", Hot/Warm/Cold, tap-to-chat link) and when they book ("Consultation booked") | `CALLMEBOT_WHATSAPP=91XXXXXXXXXX:APIKEY` in `.env.local` / Vercel (see `.env.example`) |
+
+Alerts go only for customers whose email was verified (server-signed proof), every field is checked and the plan is recalculated on the server (`api/lead`), so the endpoint can't be used to spam the owner. Without `CALLMEBOT_WHATSAPP`, development prints the alert in the terminal instead. When the client moves to the WhatsApp Business API, only `lib/whatsappAlert.ts` changes.
 
 ## FAQ assistant
 

@@ -53,6 +53,8 @@ type Dict = {
     done: string;
     editAsk: Record<Field, string>;
     errName: string;
+    errNameLong: string;
+    errNameJunk: string;
     errMobileShort: string;
     errMobileStart: string;
     errMobileFake: string;
@@ -98,6 +100,8 @@ export const STRINGS: Record<Lang, Dict> = {
         email: "Sure. Please enter your email ID again.",
       },
       errName: "Please enter your name using letters only, for example Rahul Mohanty.",
+      errNameLong: "That's a bit long. Please enter just your first and last name.",
+      errNameJunk: "That doesn't look like a real name. Please check the spelling, for example Rahul Mohanty.",
       errMobileShort: "Please check the number once. It has {n} digits, but a mobile number needs exactly 10.",
       errMobileStart: "Indian mobile numbers start with 6, 7, 8 or 9. Please check the number.",
       errMobileFake: "This doesn't look like a real mobile number. Please enter your own number, so I can send you the code.",
@@ -148,6 +152,8 @@ export const STRINGS: Record<Lang, Dict> = {
         email: "ज़रूर। अपनी ईमेल आईडी फिर से डालिए।",
       },
       errName: "कृपया अपना नाम सिर्फ़ अक्षरों में लिखिए, जैसे राहुल मोहंती।",
+      errNameLong: "यह नाम थोड़ा लंबा है। कृपया सिर्फ़ अपना पहला और आख़िरी नाम लिखिए।",
+      errNameJunk: "यह असली नाम नहीं लग रहा। कृपया स्पेलिंग चेक कीजिए, जैसे राहुल मोहंती।",
       errMobileShort: "कृपया नंबर एक बार चेक कर लीजिए। इसमें {n} अंक हैं, लेकिन मोबाइल नंबर में पूरे 10 अंक होते हैं।",
       errMobileStart: "भारत के मोबाइल नंबर 6, 7, 8 या 9 से शुरू होते हैं। कृपया नंबर चेक कर लीजिए।",
       errMobileFake: "यह नंबर असली नहीं लग रहा। कृपया अपना मोबाइल नंबर डालिए, ताकि मैं आपको कोड भेज सकूँ।",
@@ -198,6 +204,8 @@ export const STRINGS: Record<Lang, Dict> = {
         email: "ନିଶ୍ଚୟ। ଆପଣଙ୍କ ଇମେଲ ଆଇଡି ପୁଣି ଦିଅନ୍ତୁ।",
       },
       errName: "ଦୟାକରି କେବଳ ଅକ୍ଷରରେ ଆପଣଙ୍କ ପୂରା ନାମ ଲେଖନ୍ତୁ।",
+      errNameLong: "ଏହି ନାମ ଟିକେ ଲମ୍ବା। ଦୟାକରି କେବଳ ଆପଣଙ୍କ ପ୍ରଥମ ଓ ଶେଷ ନାମ ଲେଖନ୍ତୁ।",
+      errNameJunk: "ଏହା ପ୍ରକୃତ ନାମ ପରି ଲାଗୁନାହିଁ। ଦୟାକରି ବନାନ ଯାଞ୍ଚ କରନ୍ତୁ।",
       errMobileShort: "ଏହି ନମ୍ବରରେ {n}ଟି ଅଙ୍କ ଅଛି। ମୋବାଇଲ ନମ୍ବରରେ ଠିକ 10ଟି ଅଙ୍କ ରହିବା ଦରକାର। ଦୟାକରି ପୁଣି ଦିଅନ୍ତୁ।",
       errMobileStart: "ଭାରତୀୟ ମୋବାଇଲ ନମ୍ବର 6, 7, 8 କିମ୍ବା 9ରୁ ଆରମ୍ଭ ହୁଏ। ଦୟାକରି ନମ୍ବର ଯାଞ୍ଚ କରି ପୁଣି ଦିଅନ୍ତୁ।",
       errMobileFake: "ଏହା ପ୍ରକୃତ ମୋବାଇଲ ନମ୍ବର ପରି ଲାଗୁନାହିଁ। ଦୟାକରି ଆପଣଙ୍କ ନିଜ ନମ୍ବର ଦିଅନ୍ତୁ, ଯାହାଦ୍ୱାରା ମୁଁ କୋଡ ପଠାଇପାରିବି।",

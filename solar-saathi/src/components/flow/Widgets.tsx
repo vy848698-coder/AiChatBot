@@ -58,8 +58,11 @@ export function FieldInput({
 }) {
   return (
     <div
-      className={`flex h-[60px] items-center gap-2 rounded-2xl border-2 bg-white/[.05] px-2 transition-[border-color,box-shadow] focus-within:border-brand focus-within:shadow-[0_0_0_5px_rgba(62,207,142,.14)] ${
-        error ? "border-danger/80" : listening ? "border-danger/60" : "border-white/14"
+      // An error stays red even while the field has focus.
+      className={`flex h-[60px] items-center gap-2 rounded-2xl border-2 bg-white/[.05] px-2 transition-[border-color,box-shadow] ${
+        error
+          ? "border-danger/80 shadow-[0_0_0_5px_rgba(255,138,122,.14)]"
+          : `focus-within:border-brand focus-within:shadow-[0_0_0_5px_rgba(62,207,142,.14)] ${listening ? "border-danger/60" : "border-white/14"}`
       }`}
     >
       <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-brand/14 text-brand">{icon}</span>
@@ -305,7 +308,8 @@ export function DateChips({ days, value, onPick }: { days: DayOpt[]; value?: str
     row.current?.scrollTo({ left: 0 });
   }, []);
   return (
-    <div ref={row} className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+    // The fade at the right edge shows there are more days to scroll to.
+    <div ref={row} className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [mask-image:linear-gradient(to_right,black_82%,transparent)]">
       {days.map((d, i) => {
         const on = value === d.iso;
         return (

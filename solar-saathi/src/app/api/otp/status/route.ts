@@ -4,6 +4,7 @@
 
 import { mailMode } from "@/lib/email/mailer";
 import { smsMode, smsOtpOn } from "@/lib/phone/sms";
+import { alertsOn } from "@/lib/whatsappAlert";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,8 @@ export function GET() {
     ...(secret ? [] : ["OTP_SECRET (32+ characters)"]),
   ];
   return Response.json(
-    { ready: missing.length === 0, mobileOtp, sms, email, otpSecret: secret, missing },
+    // ownerWhatsApp: lead alerts to the owner (CALLMEBOT_WHATSAPP); optional, so not in `missing`.
+    { ready: missing.length === 0, mobileOtp, sms, email, otpSecret: secret, ownerWhatsApp: alertsOn(), missing },
     { headers: { "Cache-Control": "no-store" } },
   );
 }

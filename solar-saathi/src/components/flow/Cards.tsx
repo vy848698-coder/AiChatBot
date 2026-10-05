@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
+import { PHONE, TOLL_FREE, whatsAppLink } from "@/lib/contact";
 import { CALC, emi, rupees, rupeesShort, type Estimate } from "@/lib/estimate";
 import { FAQ } from "@/lib/faq";
 import { FLOW } from "@/lib/flowCopy";
@@ -28,6 +29,9 @@ function CountUp({ value, format, delay = 0 }: { value: number; format: (n: numb
   return <span ref={el}>{format(0)}</span>;
 }
 
+// Keeps a phone number or "6.5% p.a." on one line.
+const NBSP = "\u00a0";
+
 // Stable formatters: a new function each render would restart the count-up.
 const fmtInt = (n: number) => String(Math.round(n));
 const fmtR = (n: number) => rupees(n);
@@ -38,13 +42,15 @@ export function ResultsCard({
   est,
   lead,
   onBook,
-  onLater,
+  onFaq,
+  summary,
 }: {
   lang: Lang;
   est: Estimate;
   lead: Lead;
   onBook: () => void;
-  onLater: () => void;
+  onFaq: () => void;
+  summary: string; // the WhatsApp message with all their answers
 }) {
   const r = FLOW[lang].result;
   const showEmi = lead.pay === "bank" || lead.pay === "emi";
@@ -120,8 +126,8 @@ export function ResultsCard({
               ))}
             </div>
           </div>
-          <p className="mt-1 font-display text-[18px] font-bold text-white">
-            {fill(r.emiLine, { amount: rupees(emi(est.investment, tenure)), years: tenure, rate: CALC.emiRate })}
+          <p className="mt-1 font-display text-[15.5px] font-bold text-white min-[400px]:text-[18px]">
+            {fill(r.emiLine, { amount: rupees(emi(est.investment, tenure)), years: tenure, rate: CALC.emiRate }).replace("% ", "%" + NBSP)}
           </p>
         </div>
       )}
@@ -133,7 +139,7 @@ export function ResultsCard({
         <ul className="mt-2 space-y-1 text-[12px] leading-snug text-gold/90">
           {noSub && <li>• {r.noSubsidy}</li>}
           {lead.ownerOk === "no" && <li>• {r.ownerNote}</li>}
-          {est.roofCapped && <li>• {fill(r.roofNote, { ideal: est.idealKw })}</li>}
+          {est.roofCapped && <li>• {fill(r.roofNote, { ideal: est.idealKw }).replace(" kW", NBSP + "kW")}</li>}
         </ul>
       )}
       <p className="mt-2 text-[11px] text-ink-3">{r.note}</p>
@@ -143,9 +149,36 @@ export function ResultsCard({
           <IconCalendar className="h-5 w-5" />
           {r.cta}
         </PrimaryButton>
-        <button onClick={onLater} className="mx-auto mt-2 block px-3 py-1.5 text-[13px] font-semibold text-white/55 hover:text-white">
-          {r.later}
+        {/* Not ready to book? Clear doubts in the FAQ first (it has a Book button too). */}
+        <button
+          onClick={onFaq}
+          className="mt-2.5 flex w-full items-center gap-3 rounded-2xl border border-brand/35 bg-brand/[.08] px-3.5 py-3 text-left transition hover:border-brand/60 hover:bg-brand/[.12]"
+        >
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand/15 text-brand">
+            <IconSpark className="h-5.5 w-5.5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[15px] leading-tight font-bold text-white">{r.faq}</span>
+            <span className="mt-0.5 block text-[12px] leading-tight text-ink-2">{r.faqSub}</span>
+          </span>
+          <IconChevron className="h-5 w-5 shrink-0 text-brand" />
         </button>
+        {/* Or talk to the team first: WhatsApp opens with every answer and the plan typed in. */}
+        <a
+          href={whatsAppLink(summary)}
+          target="_blank"
+          rel="noopener"
+          className="mt-2 flex w-full items-center gap-3 rounded-2xl border border-[#25d366]/40 bg-[#25d366]/[.08] px-3.5 py-3 text-left transition hover:border-[#25d366]/70 hover:bg-[#25d366]/[.14]"
+        >
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#25d366]/15 text-[#25d366]">
+            <IconWhatsApp className="h-5.5 w-5.5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[15px] leading-tight font-bold text-white">{r.wa}</span>
+            <span className="mt-0.5 block text-[12px] leading-tight text-ink-2">{r.waSub}</span>
+          </span>
+          <IconChevron className="h-5 w-5 shrink-0 text-[#25d366]" />
+        </a>
       </div>
     </div>
   );
@@ -193,7 +226,7 @@ export function BookedCard({
           { icon: <IconCalendar className="h-4.5 w-4.5" />, text: dateLabel },
           { icon: <IconClock className="h-4.5 w-4.5" />, text: slotLabel },
           { icon: <IconHeadset className="h-4.5 w-4.5" />, text: fill(b.team, { district: lead.district ?? "" }) },
-          { icon: <IconPhone className="h-4.5 w-4.5" />, text: fill(b.sent, { mobile: displayMobile(lead.mobile) }) },
+          { icon: <IconPhone className="h-4.5 w-4.5" />, text: fill(b.sent, { mobile: displayMobile(lead.mobile).replace(/ /g, NBSP) }) }, // number never splits
         ].map((row, i) => (
           <motion.li
             key={i}
@@ -208,21 +241,6 @@ export function BookedCard({
         ))}
       </ul>
       <p className="mt-3 text-center text-[13px] text-ink-2">☀ {b.thanks}</p>
-      <NextSteps lang={lang} onFaq={onFaq} summary={summary} />
-    </div>
-  );
-}
-
-export function SavedCard({ lang, onFaq, summary }: { lang: Lang; onFaq: () => void; summary: string }) {
-  const f = FLOW[lang];
-  return (
-    <div lang={lang}>
-      <div className="flex items-center gap-3">
-        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-brand text-night shadow-[0_0_30px_rgba(62,207,142,.6)]">
-          <IconCheck className="h-7 w-7" />
-        </span>
-        <p className="font-display text-[22px] leading-tight font-bold">{f.skip.title}</p>
-      </div>
       <NextSteps lang={lang} onFaq={onFaq} summary={summary} />
     </div>
   );
@@ -254,11 +272,11 @@ function NextSteps({ lang, onFaq, summary }: { lang: Lang; onFaq: () => void; su
         <IconChevron className="h-5 w-5 shrink-0" />
       </motion.button>
       <div className="mt-2 grid grid-cols-3 gap-2">
-        <a href={`tel:${PHONE}`} className={`${small} border-white/12 bg-white/[.05] text-white/90 hover:border-brand/50`}>
+        <a href={`tel:${PHONE.tel}`} className={`${small} border-white/12 bg-white/[.05] text-white/90 hover:border-brand/50`}>
           <IconPhone className="h-5 w-5 text-brand" />
           {h.call}
         </a>
-        <a href={waLink(summary)} target="_blank" rel="noopener" className={`${small} border-[#25d366]/40 bg-[#25d366]/12 text-white/90 hover:bg-[#25d366]/20`}>
+        <a href={whatsAppLink(summary)} target="_blank" rel="noopener" className={`${small} border-[#25d366]/40 bg-[#25d366]/12 text-white/90 hover:bg-[#25d366]/20`}>
           <IconWhatsApp className="h-5 w-5 text-[#25d366]" />
           {h.whatsapp}
         </a>
@@ -275,15 +293,11 @@ function NextSteps({ lang, onFaq, summary }: { lang: Lang; onFaq: () => void; su
   );
 }
 
-// ── Talk to an Expert (PDF §5): call, WhatsApp with the lead summary, callback ──
-const PHONE = "+919124165341";
-const TOLL_FREE = "18008913731";
-const waLink = (text: string) => `https://wa.me/${PHONE.replace("+", "")}?text=${encodeURIComponent(text)}`;
-
+// ── Talk to an Expert (PDF §5): call, WhatsApp with all the customer's answers, callback ──
 export function ExpertSheet({ open, onClose, lang, lead, summary }: { open: boolean; onClose: () => void; lang: Lang; lead: Lead; summary: string }) {
   const e = FLOW[lang].expert;
   const [requested, setRequested] = useState(false);
-  const wa = waLink(summary);
+  const wa = whatsAppLink(summary);
   return (
     <AnimatePresence>
       {open && (
@@ -311,9 +325,9 @@ export function ExpertSheet({ open, onClose, lang, lead, summary }: { open: bool
             </div>
             <p className="mt-3 text-[13.5px] text-ink-2">{e.sub}</p>
             <div className="mt-4 grid gap-2.5">
-              <a href={`tel:${PHONE}`} className="btn-primary flex h-13 items-center justify-center gap-2 rounded-2xl py-3.5 text-[16px] font-bold">
+              <a href={`tel:${PHONE.tel}`} className="btn-primary flex h-13 items-center justify-center gap-2 rounded-2xl py-3.5 text-[16px] font-bold">
                 <IconPhone className="h-5 w-5" />
-                {e.call} · +91 91241 65341
+                {e.call} · {PHONE.show}
               </a>
               <a href={wa} target="_blank" rel="noopener" className="flex items-center justify-center gap-2 rounded-2xl bg-[#25d366] py-3.5 text-[16px] font-bold text-[#062b14]">
                 <IconWhatsApp className="h-5 w-5" />
@@ -327,8 +341,8 @@ export function ExpertSheet({ open, onClose, lang, lead, summary }: { open: bool
                 {requested ? <IconCheck className="h-5 w-5" /> : <IconCallback className="h-5 w-5" />}
                 {requested ? e.callbackDone : e.callback}
               </button>
-              <a href={`tel:${TOLL_FREE}`} className="text-center text-[13px] text-ink-3 underline-offset-2 hover:underline" lang="en">
-                {e.tollFree}: 1800 891 3731
+              <a href={`tel:${TOLL_FREE.tel}`} className="text-center text-[13px] text-ink-3 underline-offset-2 hover:underline" lang="en">
+                {e.tollFree}: {TOLL_FREE.show}
               </a>
             </div>
             <p className="sr-only">{lead.name}</p>

@@ -4,7 +4,7 @@ import type { ReactNode, RefObject } from "react";
 import { motion } from "motion/react";
 import { FAQ, POPULAR, TOPICS, itemsOf, topicOf, type TopicId } from "@/lib/faq";
 import type { Lang } from "@/lib/i18n";
-import { IconChevron, IconGrid, IconHeadset, IconMic, IconSearch, IconSend } from "../ui/icons";
+import { IconCalendar, IconChevron, IconGrid, IconHeadset, IconMic, IconSearch, IconSend } from "../ui/icons";
 
 // ── Solar Saathi FAQ assistant (PDF §4) ──────────────────────────────────
 // Saathi speaks the answer in his bubble; this card holds what you can do
@@ -31,6 +31,8 @@ export function FaqCard({
   onQuestion,
   onHome,
   onExpert,
+  onBook,
+  bookLabel,
   mic,
   inputRef,
 }: {
@@ -43,11 +45,20 @@ export function FaqCard({
   onQuestion: (id: string) => void;
   onHome: () => void;
   onExpert: () => void;
+  // Set while the user hasn't booked yet: questions answered → book from here.
+  onBook?: () => void;
+  bookLabel: string;
   mic: Mic;
   inputRef: RefObject<HTMLInputElement | null>;
 }) {
   const c = FAQ[lang];
   const ask = <AskBar value={draft} onChange={onDraft} onSubmit={onAsk} placeholder={c.ui.placeholder} askLabel={c.ui.ask} mic={mic} inputRef={inputRef} />;
+  const book = onBook && (
+    <button onClick={onBook} className="btn-primary flex h-13 w-full items-center justify-center gap-2 rounded-2xl px-3 text-[16px] font-bold">
+      <IconCalendar className="h-5 w-5 shrink-0" />
+      {bookLabel}
+    </button>
+  );
   const questions = (ids: string[]) => (
     <div className="grid gap-2">
       {ids.map((id, i) => (
@@ -74,6 +85,7 @@ export function FaqCard({
         <Section label={c.ui.topics}>
           <TopicGrid lang={lang} onTopic={onTopic} />
         </Section>
+        {book}
       </div>
     );
   }
@@ -95,6 +107,7 @@ export function FaqCard({
         </div>
         {questions(itemsOf(view.topic))}
         {ask}
+        {book}
       </div>
     );
   }
@@ -126,6 +139,7 @@ export function FaqCard({
         <Section label={c.ui.related}>{questions([...new Set(related)])}</Section>
         {actions}
         {ask}
+        {book}
       </div>
     );
   }
@@ -150,6 +164,7 @@ export function FaqCard({
       )}
       {view.kind === "suggest" && actions}
       {ask}
+      {book}
     </div>
   );
 }

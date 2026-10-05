@@ -23,13 +23,32 @@ export function isFakeMobile(v: string) {
 }
 
 // Names may be typed (or dictated) in Latin, Odia or Devanagari script.
-export function isName(v: string) {
+// Real-name limits: 2–40 characters, up to 4 words of up to 20 letters each.
+export const NAME_MAX = 40;
+const NAME_WORDS = 4;
+const WORD_MAX = 20;
+
+// What's wrong with a name, or null if it's fine:
+// "chars": not just letters; "long": too long / too many words;
+// "junk": keyboard mash ("aaa", "yadavbbb", "xyzq", "bcdfgh").
+export function nameProblem(v: string): "chars" | "long" | "junk" | null {
   const s = v.trim();
-  if (s.length > 60 || s.split(/\s+/).length > 6) return false;
-  if (!/^[\p{L}\p{M}][\p{L}\p{M} .'-]*$/u.test(s)) return false;
-  if (s.replace(/[^\p{L}]/gu, "").length < 2) return false;
-  return !/(\p{L})\1\1/u.test(s.toLowerCase()); // "aaa", "kkkk"
+  if (!/^[\p{L}\p{M}][\p{L}\p{M} .'-]*$/u.test(s)) return "chars";
+  const words = s.split(/\s+/);
+  if (s.length > NAME_MAX || words.length > NAME_WORDS || words.some((w) => w.replace(/[.'-]/g, "").length > WORD_MAX)) return "long";
+  if (s.replace(/[^\p{L}]/gu, "").length < 2) return "junk";
+  if (/(\p{L})\1\1/u.test(s.toLowerCase())) return "junk"; // same letter 3 times: "aaa", "bbb"
+  // English letters only: a word of 3+ letters with no vowel (a e i o u; Indian
+  // names never rely on "y" alone), or 5 consonants in a row.
+  for (const w of words.map((x) => x.toLowerCase().replace(/[.'-]/g, ""))) {
+    if (!/^[a-z]+$/.test(w)) continue; // Indic scripts: the checks above are enough
+    if (w.length >= 3 && !/[aeiou]/.test(w)) return "junk";
+    if (/[bcdfghjklmnpqrstvwxz]{5}/.test(w)) return "junk";
+  }
+  return null;
 }
+
+export const isName = (v: string) => nameProblem(v) === null;
 
 // "  rahul   MOHANTY. " → "Rahul Mohanty". Mixed-case (McDonald) and
 // Indic-script names are kept as typed.

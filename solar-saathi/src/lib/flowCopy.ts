@@ -52,13 +52,12 @@ export type FlowCopy = {
     say: string; sayNoSub: string; caption: string; title: string; kw: string; panels: string; cost: string; subsidy: string;
     central: string; state: string; youPay: string; monthly: string; life: string; payback: string; years: string;
     co2: string; trees: string; emi: string; emiLine: string; noSubsidy: string; ownerNote: string; roofNote: string;
-    note: string; cta: string; later: string;
+    note: string; cta: string; faq: string; faqSub: string; wa: string; waSub: string; next: string;
   };
   mode: { ask: string; opts: Opts<"call" | "visit" | "online"> };
   date: { ask: string; today: string; tomorrow: string };
   slot: { ask: string; opts: Opts<"s1" | "s2" | "s3" | "s4"> };
   booked: { say: string; title: string; team: string; sent: string; ref: string; thanks: string };
-  skip: { say: string; title: string };
   expert: {
     button: string; title: string; sub: string; call: string; whatsapp: string; callback: string;
     callbackDone: string; hours: string; tollFree: string;
@@ -247,7 +246,13 @@ export const FLOW: Record<Lang, FlowCopy> = {
       roofNote: "Sized to your roof space. A bigger roof could fit {ideal} kW.",
       note: "Estimate from the Clans Machina calculator. Final price after a free site survey.",
       cta: "Book my free consultation",
-      later: "Maybe later",
+      // Second path on the plan: clear doubts in the FAQ first, then book.
+      faq: "Have questions? Ask Saathi first",
+      faqSub: "Subsidy, loans, savings, installation…",
+      // Third path: talk to the team first (WhatsApp opens with the plan typed in).
+      wa: "Talk to us on WhatsApp",
+      waSub: "Your plan is shared, no need to repeat anything",
+      next: "Book your free consultation now, ask me any question, or talk to our team on WhatsApp.",
     },
     mode: {
       ask: "Wonderful! How would you like to meet our solar expert? It's completely free.",
@@ -265,10 +270,6 @@ export const FLOW: Record<Lang, FlowCopy> = {
       sent: "Our team will confirm on {mobile}",
       ref: "Booking ID",
       thanks: "Thank you for choosing Clans Machina",
-    },
-    skip: {
-      say: "No problem, {first}. I've saved your solar plan, and our team will be happy to help whenever you're ready.",
-      title: "Your plan is saved",
     },
     expert: {
       button: "Talk to an expert",
@@ -462,7 +463,11 @@ export const FLOW: Record<Lang, FlowCopy> = {
       roofNote: "आपकी छत की जगह के हिसाब से साइज़ तय किया गया है। बड़ी छत पर {ideal} kW लग सकता है।",
       note: "यह Clans Machina कैलकुलेटर का अनुमान है। फ़ाइनल कीमत फ़्री साइट सर्वे के बाद।",
       cta: "मेरा फ़्री कंसल्टेशन बुक करें",
-      later: "बाद में",
+      faq: "सवाल हैं? पहले Saathi से पूछें",
+      faqSub: "सब्सिडी, लोन, बचत, इंस्टॉलेशन…",
+      wa: "WhatsApp पर बात करें",
+      waSub: "आपका प्लान साथ जाएगा, कुछ दोबारा बताने की ज़रूरत नहीं",
+      next: "अभी अपना फ़्री कंसल्टेशन बुक कीजिए, मुझसे कोई भी सवाल पूछिए, या WhatsApp पर हमारी टीम से बात कीजिए।",
     },
     mode: {
       ask: "बहुत बढ़िया! आप हमारे सोलर एक्सपर्ट से कैसे मिलना चाहेंगे? यह बिल्कुल फ़्री है।",
@@ -480,10 +485,6 @@ export const FLOW: Record<Lang, FlowCopy> = {
       sent: "हमारी टीम {mobile} पर कन्फ़र्म करेगी",
       ref: "बुकिंग आईडी",
       thanks: "Clans Machina चुनने के लिए धन्यवाद",
-    },
-    skip: {
-      say: "कोई बात नहीं, {first}। मैंने आपका सोलर प्लान सेव कर लिया है। जब भी आप तैयार हों, हमारी टीम मदद के लिए हाज़िर है।",
-      title: "आपका प्लान सेव हो गया",
     },
     expert: {
       button: "एक्सपर्ट से बात करें",
@@ -677,7 +678,11 @@ export const FLOW: Record<Lang, FlowCopy> = {
       roofNote: "ଆପଣଙ୍କ ଛାତର ସ୍ଥାନ ଅନୁସାରେ ଆକାର ସ୍ଥିର କରାଯାଇଛି। ବଡ଼ ଛାତରେ {ideal} kW ଲାଗିପାରିବ।",
       note: "ଏହା Clans Machina କାଲକୁଲେଟରର ଆକଳନ। ମାଗଣା ସାଇଟ ସର୍ଭେ ପରେ ଚୂଡ଼ାନ୍ତ ମୂଲ୍ୟ।",
       cta: "ମୋର ମାଗଣା ପରାମର୍ଶ ବୁକ କରନ୍ତୁ",
-      later: "ପରେ",
+      faq: "ପ୍ରଶ୍ନ ଅଛି? ପ୍ରଥମେ Saathi ଙ୍କୁ ପଚାରନ୍ତୁ",
+      faqSub: "ସବସିଡି, ଋଣ, ସଞ୍ଚୟ, ଲଗାଇବା…",
+      wa: "WhatsApp ରେ କଥା ହୁଅନ୍ତୁ",
+      waSub: "ଆପଣଙ୍କ ପ୍ଲାନ ସହିତ ଯିବ, କିଛି ପୁଣି କହିବା ଦରକାର ନାହିଁ",
+      next: "ଏବେ ଆପଣଙ୍କ ମାଗଣା ପରାମର୍ଶ ବୁକ କରନ୍ତୁ, ମୋତେ ଯେକୌଣସି ପ୍ରଶ୍ନ ପଚାରନ୍ତୁ, କିମ୍ବା WhatsApp ରେ ଆମ ଟିମ ସହ କଥା ହୁଅନ୍ତୁ।",
     },
     mode: {
       ask: "ବହୁତ ଭଲ! ଆପଣ ଆମ ସୋଲାର ବିଶେଷଜ୍ଞଙ୍କ ସହ କିପରି କଥା ହେବାକୁ ଚାହିଁବେ? ଏହା ସମ୍ପୂର୍ଣ୍ଣ ମାଗଣା।",
@@ -695,10 +700,6 @@ export const FLOW: Record<Lang, FlowCopy> = {
       sent: "ଆମ ଟିମ {mobile} ରେ ନିଶ୍ଚିତ କରିବେ",
       ref: "ବୁକିଂ ଆଇଡି",
       thanks: "Clans Machina ବାଛିଥିବାରୁ ଧନ୍ୟବାଦ",
-    },
-    skip: {
-      say: "କିଛି ଅସୁବିଧା ନାହିଁ, {first}। ମୁଁ ଆପଣଙ୍କ ସୋଲାର ପ୍ଲାନ ସେଭ କରିଦେଲି। ଆପଣ ପ୍ରସ୍ତୁତ ହେଲେ ଆମ ଟିମ ସାହାଯ୍ୟ ପାଇଁ ପ୍ରସ୍ତୁତ।",
-      title: "ଆପଣଙ୍କ ପ୍ଲାନ ସେଭ ହୋଇଗଲା",
     },
     expert: {
       button: "ବିଶେଷଜ୍ଞଙ୍କ ସହ କଥା ହୁଅନ୍ତୁ",
