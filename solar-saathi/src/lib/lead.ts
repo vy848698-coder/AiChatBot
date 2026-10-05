@@ -32,6 +32,9 @@ export type Lead = {
   date?: string; // YYYY-MM-DD
   slot?: "s1" | "s2" | "s3" | "s4";
   bookingId?: string;
+  // 4. FAQ: questions asked (matched ones in English, others as typed), so
+  // the sales team sees them without asking again (PDF §5).
+  faq?: string[];
 };
 
 export const EMPTY_LEAD: Lead = { name: "", mobile: "", email: "" };

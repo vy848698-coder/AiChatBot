@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { tryStartAudio, unlockAudio } from "@/lib/audio";
-import { LANGS, STRINGS, WELCOME, type Lang } from "@/lib/i18n";
+import { PICKABLE, STRINGS, WELCOME, type Lang } from "@/lib/i18n";
 import { sfx } from "@/lib/sfx";
 import { voice } from "@/lib/voice";
 import { WelcomeScene } from "./welcome/WelcomeScene";
@@ -72,7 +72,7 @@ export default function SaathiApp() {
   useEffect(() => {
     voice.prefetch(WELCOME.intro, "en");
     voice.prefetch(WELCOME.greet, "en");
-    LANGS.forEach((l) => voice.prefetch(STRINGS[l.code].langChosen, l.code));
+    PICKABLE.forEach((l) => voice.prefetch(STRINGS[l.code].langChosen, l.code));
   }, []);
 
   // Saathi lands, waves and says hello. Aloud if the browser allows sound

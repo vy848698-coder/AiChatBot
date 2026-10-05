@@ -11,6 +11,7 @@
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { faqSpoken } from "../src/lib/faq";
 import { FLOW } from "../src/lib/flowCopy";
 import { LANGS, STRINGS, WELCOME, type Lang } from "../src/lib/i18n";
 import { clipId, splitSentences, type VoiceManifest } from "../src/lib/tts/clips";
@@ -33,7 +34,7 @@ const leaves = (o: unknown, out: string[] = []): string[] => {
 
 // Spoken lines end in sentence punctuation; button labels and titles don't.
 function sentencesFor(lang: Lang) {
-  const lines = [...leaves(STRINGS[lang]), ...leaves(FLOW[lang]), ...(lang === "en" ? leaves(WELCOME) : [])];
+  const lines = [...leaves(STRINGS[lang]), ...leaves(FLOW[lang]), ...faqSpoken(lang), ...(lang === "en" ? leaves(WELCOME) : [])];
   const out = new Set<string>();
   for (const line of lines) {
     if (!/[.!?।…]/.test(line)) continue;

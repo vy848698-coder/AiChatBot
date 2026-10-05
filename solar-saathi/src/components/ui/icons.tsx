@@ -83,3 +83,15 @@ export const IconWhatsApp = (p: P) => (
 export const IconCallback = (p: P) => (
   <svg {...base} {...p}><path d="M6 3l3 4-2 3c2 3 3 4 6 6l3-2 4 3c-1 3-4 4-6 3C10 20 4 14 3 9 2 7 3 4 6 3z" /><path d="M15 3h6v6M21 3l-6 6" /></svg>
 );
+export const IconSearch = (p: P) => (
+  <svg {...base} {...p}><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
+);
+export const IconChevron = (p: P) => (
+  <svg {...base} {...p}><path d="M9 6l6 6-6 6" /></svg>
+);
+export const IconSpark = (p: P) => (
+  <svg {...base} {...p}><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" /><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z" /></svg>
+);
+export const IconGrid = (p: P) => (
+  <svg {...base} {...p}><rect x="4" y="4" width="6.5" height="6.5" rx="1.5" /><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5" /><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5" /><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5" /></svg>
+);

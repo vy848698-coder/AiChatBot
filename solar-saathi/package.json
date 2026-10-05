@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start -p 3005",
     "lint": "eslint",
-    "voice:build": "tsx scripts/build-voice.ts"
+    "voice:build": "tsx scripts/build-voice.ts",
+    "faq:check": "tsx scripts/check-faq.ts"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.9",

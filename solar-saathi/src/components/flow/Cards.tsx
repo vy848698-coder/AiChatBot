@@ -3,11 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { CALC, emi, rupees, rupeesShort, type Estimate } from "@/lib/estimate";
+import { FAQ } from "@/lib/faq";
 import { FLOW } from "@/lib/flowCopy";
 import { fill, type Lang } from "@/lib/i18n";
 import type { Lead } from "@/lib/lead";
 import { displayMobile } from "@/lib/speech";
-import { IconBolt, IconCalendar, IconCallback, IconCheck, IconClock, IconHeadset, IconHome, IconPhone, IconWhatsApp } from "../ui/icons";
+import { IconBolt, IconCalendar, IconCallback, IconCheck, IconChevron, IconClock, IconHeadset, IconHome, IconPhone, IconSpark, IconWhatsApp } from "../ui/icons";
 import { PrimaryButton } from "./Widgets";
 
 // Animates a number up from 0 once (ease-out), writing straight to the DOM.
@@ -156,14 +157,16 @@ export function BookedCard({
   modeLabel,
   dateLabel,
   slotLabel,
-  onExpert,
+  onFaq,
+  summary,
 }: {
   lang: Lang;
   lead: Lead;
   modeLabel: string;
   dateLabel: string;
   slotLabel: string;
-  onExpert: () => void;
+  onFaq: () => void;
+  summary: string;
 }) {
   const b = FLOW[lang].booked;
   return (
@@ -205,15 +208,12 @@ export function BookedCard({
         ))}
       </ul>
       <p className="mt-3 text-center text-[13px] text-ink-2">☀ {b.thanks}</p>
-      <button onClick={onExpert} className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-white/14 bg-white/[.05] text-[15px] font-semibold text-white/90 hover:border-brand/50">
-        <IconHeadset className="h-5 w-5 text-brand" />
-        {FLOW[lang].expert.button}
-      </button>
+      <NextSteps lang={lang} onFaq={onFaq} summary={summary} />
     </div>
   );
 }
 
-export function SavedCard({ lang, onExpert }: { lang: Lang; onExpert: () => void }) {
+export function SavedCard({ lang, onFaq, summary }: { lang: Lang; onFaq: () => void; summary: string }) {
   const f = FLOW[lang];
   return (
     <div lang={lang}>
@@ -223,11 +223,53 @@ export function SavedCard({ lang, onExpert }: { lang: Lang; onExpert: () => void
         </span>
         <p className="font-display text-[22px] leading-tight font-bold">{f.skip.title}</p>
       </div>
-      <div className="mt-4">
-        <PrimaryButton onClick={onExpert}>
-          <IconHeadset className="h-5 w-5" />
-          {f.expert.button}
-        </PrimaryButton>
+      <NextSteps lang={lang} onFaq={onFaq} summary={summary} />
+    </div>
+  );
+}
+
+// ── End of the journey: "Have more questions?" → FAQ, call, WhatsApp, callback ──
+function NextSteps({ lang, onFaq, summary }: { lang: Lang; onFaq: () => void; summary: string }) {
+  const h = FAQ[lang].hub;
+  const [requested, setRequested] = useState(false);
+  const small = "flex min-h-[64px] flex-col items-center justify-center gap-1 rounded-2xl border px-1 py-2 text-[12.5px] font-semibold transition";
+  return (
+    <div className="mt-4 border-t border-white/10 pt-4">
+      <p className="mb-2.5 text-[11.5px] font-bold tracking-[.12em] text-gold uppercase">{h.title}</p>
+      <motion.button
+        onClick={onFaq}
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.5, type: "spring", stiffness: 260, damping: 22 }}
+        whileTap={{ scale: 0.98 }}
+        className="btn-primary flex w-full items-center gap-3 rounded-2xl px-3.5 py-3 text-left"
+      >
+        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-night/15">
+          <IconSpark className="h-6 w-6" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[16px] leading-tight font-bold">{h.faq}</span>
+          <span className="mt-0.5 block text-[12px] leading-tight font-medium opacity-80">{h.faqSub}</span>
+        </span>
+        <IconChevron className="h-5 w-5 shrink-0" />
+      </motion.button>
+      <div className="mt-2 grid grid-cols-3 gap-2">
+        <a href={`tel:${PHONE}`} className={`${small} border-white/12 bg-white/[.05] text-white/90 hover:border-brand/50`}>
+          <IconPhone className="h-5 w-5 text-brand" />
+          {h.call}
+        </a>
+        <a href={waLink(summary)} target="_blank" rel="noopener" className={`${small} border-[#25d366]/40 bg-[#25d366]/12 text-white/90 hover:bg-[#25d366]/20`}>
+          <IconWhatsApp className="h-5 w-5 text-[#25d366]" />
+          {h.whatsapp}
+        </a>
+        <button
+          onClick={() => setRequested(true)}
+          disabled={requested}
+          className={`${small} border-white/12 bg-white/[.05] text-white/90 hover:border-brand/50 disabled:border-brand/40 disabled:text-mint`}
+        >
+          {requested ? <IconCheck className="h-5 w-5" /> : <IconCallback className="h-5 w-5 text-brand" />}
+          {requested ? h.callbackDone : h.callback}
+        </button>
       </div>
     </div>
   );
@@ -236,11 +278,12 @@ export function SavedCard({ lang, onExpert }: { lang: Lang; onExpert: () => void
 // ── Talk to an Expert (PDF §5): call, WhatsApp with the lead summary, callback ──
 const PHONE = "+919124165341";
 const TOLL_FREE = "18008913731";
+const waLink = (text: string) => `https://wa.me/${PHONE.replace("+", "")}?text=${encodeURIComponent(text)}`;
 
 export function ExpertSheet({ open, onClose, lang, lead, summary }: { open: boolean; onClose: () => void; lang: Lang; lead: Lead; summary: string }) {
   const e = FLOW[lang].expert;
   const [requested, setRequested] = useState(false);
-  const wa = `https://wa.me/${PHONE.replace("+", "")}?text=${encodeURIComponent(summary)}`;
+  const wa = waLink(summary);
   return (
     <AnimatePresence>
       {open && (

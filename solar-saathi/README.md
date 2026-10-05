@@ -2,6 +2,8 @@
 
 AI voice chatbot for rooftop solar in Odia, Hindi and English. The research and the full build plan are in [`../docs/01-research-and-build-plan.md`](../docs/01-research-and-build-plan.md).
 
+> **Languages live: Hindi and English.** Odia is fully written (all copy, FAQ, voice set-up) but hidden from the language picker until the client asks for it. To bring it back, add `"or"` to `LIVE_LANGS` in `src/lib/i18n.ts`, then get the Odia text checked and pick an Odia voice.
+
 ## Run
 
 ```bash
@@ -12,7 +14,7 @@ npm run dev                  # http://localhost:3005 · phones on the same Wi-Fi
 
 ## What's built
 
-The whole customer journey from the client brief (PDF §1–3, §5), with Saathi (a 3D robot, 2D fallback without WebGL) speaking every step in Odia / Hindi / English:
+The whole customer journey from the client brief (PDF §1–5), with Saathi (a 3D robot, 2D fallback without WebGL) speaking every step in Odia / Hindi / English:
 
 | Section | Steps (follow-ups only when they apply) |
 |---|---|
@@ -22,13 +24,22 @@ The whole customer journey from the client brief (PDF §1–3, §5), with Saathi
 | 3 · Your home | Own/rented (→ owner's permission) · property type (flat → own terrace or society roof) · monthly bill slider ₹500–₹10,000 (or exact amount above) · roof space (or "not sure") · goal (backup → daily power cuts) · install timing · payment |
 | 4 · Your plan | Client's calculator (`lib/estimate.ts`, same numbers as clansmachina.com): kW, panels, cost, central + Odisha subsidy, investment, monthly & 25-year savings, payback, EMI (bank/EMI), CO₂ |
 | 5 · Book | "Book my free consultation" on the plan → phone / site visit / online → date (Mon–Sat) → time slot → confirmation (booking ID, district team) — or "Maybe later" → plan saved |
+| 6 · FAQ | After the booking (or saved plan): **"Have more questions?"** → **Ask Saathi · Solar FAQ**, Call, WhatsApp, Callback. The FAQ has the PDF's 7 topics (basics, subsidy, savings, finance, installation, net metering, warranty & care) with 38 questions. Saathi **speaks each answer**, and the card shows one **key fact** (e.g. "Up to ₹1,38,000 in Odisha") plus related questions. Customers can also **type or speak their own question** in any of the 3 languages. If nothing matches, Saathi says so and offers the expert |
 | Always | **Talk to an Expert** (call, WhatsApp with the customer's details, callback, toll-free) · Back = previous question with its answer cleared |
 
 Saathi reacts to every answer before the next question (e.g. the subsidy goal → "In Odisha you can get up to ₹1,38,000"), using only figures from the client's calculator.
 
 **Input checks** (`lib/validate.ts`): names (letters only, no "aaaa"), mobile (10 digits, starts 6–9, rejects 9999999999 / 9876543210), email (strict format + common domain typos), PIN (6 digits, starts 1–8), area (real words), exact bill (₹10,001–₹10,00,000). Each failure gets a specific spoken message.
 
-Every answer is saved as one lead (`lib/lead.ts`) with a **Hot / Warm / Cold** score, ready for Zoho Bigin.
+Every answer is saved as one lead (`lib/lead.ts`) with a **Hot / Warm / Cold** score, ready for Zoho Bigin. FAQ questions asked are saved on the lead (`faq`) and go into the WhatsApp message, so the agent doesn't have to ask again.
+
+## FAQ assistant
+
+All content is in `src/lib/faq.ts`, separate from the screens so it can later move to the admin-editable knowledge base. Sources: the client's own site (`/faq.html` and the on-grid / off-grid / hybrid guides) first, then PM Surya Ghar, Odisha (OREDA top-up ₹25k / ₹50k / ₹60k) and TP Odisha DISCOMs. Figures match the calculator. **Checked Oct 2026: recheck subsidy and loan figures when the schemes change.**
+
+- **Edit an answer:** change `a` (spoken, numbers in words) and `k` (the key fact) in all three languages, then run `npm run voice:build`.
+- **A question didn't match:** add it to `scripts/check-faq.ts`, add keywords to that item in `ITEMS` (`"a+b"` means both words must appear), then run `npm run faq:check` until it passes.
+- Matching is local keyword scoring (no AI cost, works offline). A cloud model can replace `matchFaq` later for open-ended questions.
 
 ### Demo / not live yet
 - SMS code: sent for real once `MC_CUSTOMER_ID` / `MC_PASSWORD` are set (see below); without them, development shows the code on screen.
@@ -38,9 +49,11 @@ Every answer is saved as one lead (`lib/lead.ts`) with a **Hot / Warm / Cold** s
 
 ## Mobile verification (SMS)
 
+> **Currently OFF** (Oct 2026, waiting for the client's decision because SMS is paid). The number is still checked on the server (rules below), then the user goes straight to the email step, and Saathi says "your number is saved", not "verified". All the SMS code is kept: set `NEXT_PUBLIC_SMS_OTP=on` (plus the `MC_` keys) and redeploy to turn it back on.
+
 Before any SMS: the number must be 10 digits starting 6–9, not a placeholder (9999999999, 9876543210, 9123456789, 7000000000…), and a mobile number under India's numbering plan (libphonenumber). Then a 6-digit code is texted and must be typed back. Same rules as the email code: 10 minutes, 5 tries (then a fresh code), resend after 30 s, max 5 per number per hour, 20 per device per hour, and a server-signed `mobileProof` on the lead.
 
-**Sending:** Message Central VerifyNow: no DLT registration, free test credits, then about ₹0.10 per OTP. Sign up at <https://www.messagecentral.com>, then in `.env.local`:
+**Sending:** Message Central VerifyNow: no DLT registration, no monthly fee, free signup credits, then ₹0.20 per OTP (only if you top up). Message Central generates the code (valid about 60 s) and checks it; we never see or store it. Sign up at <https://www.messagecentral.com>, then in `.env.local`:
 
 ```
 MC_CUSTOMER_ID=C-XXXXXXXX
@@ -48,6 +61,17 @@ MC_PASSWORD=<your Message Central password>
 ```
 
 Code: `src/lib/phone/`, `src/lib/otp.ts` (shared with email) and `src/app/api/otp/`.
+
+**On Vercel** (Project → Settings → Environment Variables, then Redeploy):
+
+| Variable | Value |
+|---|---|
+| `MC_CUSTOMER_ID` | from Message Central (C-…) |
+| `MC_PASSWORD` | your Message Central login password |
+| `OTP_SECRET` | 32+ random characters, **required**: without it no SMS or email code is sent |
+| `SMTP_USER` / `SMTP_PASS` | the Gmail + app password, for the email code step |
+
+Then open `https://<your-app>.vercel.app/api/otp/status`. It must say `"ready": true`; otherwise `missing` lists what's not set (values are never shown).
 
 Automated tests send the header `x-saathi-test: 1`, which (in development only) shows codes on screen instead of sending real SMS/email.
 
@@ -105,4 +129,5 @@ Silence around each clip is trimmed and sentences are joined with short natural 
 | `src/lib/tts/` · `scripts/build-voice.ts` | Voice catalog, engines (Edge / Azure / Sarvam), per-language choice, clip ids, recorder |
 | `src/lib/validate.ts` | Every input check |
 | `src/lib/speech.ts` | How numbers and emails are spoken |
-| `src/lib/i18n.ts` · `src/lib/flowCopy.ts` | All copy. **Odia needs a native-speaker review** |
+| `src/lib/i18n.ts` · `src/lib/flowCopy.ts` · `src/lib/faq.ts` | All copy (faq.ts = FAQ content + matcher). **Odia needs a native-speaker review** |
+| `src/components/flow/Faq.tsx` | FAQ screens: topics, questions, answer + key fact, ask bar with mic |

@@ -2,7 +2,7 @@
 
 import type { CSSProperties } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { LANGS, WELCOME, type Lang } from "@/lib/i18n";
+import { PICKABLE, WELCOME, type Lang } from "@/lib/i18n";
 import type { MascotMood } from "../mascot/Mascot";
 import { Saathi } from "../mascot/Saathi";
 import { SpeechBubble, type Bubble } from "../SpeechBubble";
@@ -134,9 +134,9 @@ export function WelcomeScreen({
               initial="hidden"
               animate="show"
               variants={{ show: { transition: { staggerChildren: 0.08, delayChildren: 0.5 } } }}
-              className="mx-auto grid w-full max-w-[440px] grid-cols-3 gap-2.5"
+              className={`mx-auto grid w-full max-w-[440px] gap-2.5 ${PICKABLE.length === 3 ? "grid-cols-3" : "grid-cols-2"}`}
             >
-              {LANGS.map((l) => {
+              {PICKABLE.map((l) => {
                 const active = picked === l.code;
                 return (
                   <motion.button

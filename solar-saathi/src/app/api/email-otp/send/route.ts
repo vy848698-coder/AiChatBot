@@ -7,7 +7,7 @@
 
 import { checkEmail } from "@/lib/email/domain";
 import { mailMode, sendCodeEmail } from "@/lib/email/mailer";
-import { CODE_TTL_MS, issueTicket, newCode } from "@/lib/otp";
+import { CODE_TTL_MS, issueTicket, newCode, secretReady } from "@/lib/otp";
 import type { Lang } from "@/lib/i18n";
 import { clientIp, isTestRequest, rateLimit, undoHit } from "@/lib/rateLimit";
 
@@ -30,6 +30,7 @@ export async function POST(request: Request) {
   // Can this address receive mail at all? (format, throwaway inbox, domain)
   const check = await checkEmail(email);
   if (!check.ok) return fail(check.reason);
+  if (!secretReady()) return fail("unavailable", 503);
 
   // One code per 30 s and 5 per hour for an address; 20 per hour per device.
   const ip = clientIp(request);

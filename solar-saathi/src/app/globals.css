@@ -280,3 +280,9 @@ body {
     animation: none !important;
   }
 }
+
+/* Spaced-out capitals suit English labels only; letter-spacing breaks up
+   Devanagari and Odia words. (Unlayered, so it beats the tracking utility.) */
+:is(:lang(hi), :lang(or)) .uppercase {
+  letter-spacing: normal;
+}

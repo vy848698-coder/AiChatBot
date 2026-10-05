@@ -1,14 +1,15 @@
 // Sends a 6-digit code to the user's mobile by SMS.
 // POST { mobile } →
 //   { ok: true, ticket, resendAfter, expiresIn, devCode? }
+//   { ok: true, checked: true }   SMS code switched off: the number passed the checks, no SMS sent
 //   { ok: false, error: "invalid" | "fake" | "wait" | "limit" | "unavailable", retryAfter? }
 // The number is checked first (format, placeholders, India's numbering plan).
 // The ticket is signed; it holds a hash of our code, or the SMS provider's
 // reference when the provider made the code.
 
-import { CODE_TTL_MS, issueTicket, newCode } from "@/lib/otp";
+import { CODE_TTL_MS, issueTicket, newCode, secretReady } from "@/lib/otp";
 import { checkMobile } from "@/lib/phone/check";
-import { sendSmsCode, smsMode } from "@/lib/phone/sms";
+import { sendSmsCode, smsMode, smsOtpOn } from "@/lib/phone/sms";
 import { clientIp, isTestRequest, rateLimit, undoHit } from "@/lib/rateLimit";
 import { cleanMobile } from "@/lib/validate";
 
@@ -28,6 +29,15 @@ export async function POST(request: Request) {
 
   const check = checkMobile(mobile);
   if (!check.ok) return fail(check.reason);
+
+  // SMS code switched off: the checks above are the whole step.
+  if (!smsOtpOn()) {
+    const r = rateLimit(`mobchk|${clientIp(request)}`, 60, 3600_000);
+    if (!r.ok) return fail("limit", 429, { retryAfter: r.retryAfter });
+    return Response.json({ ok: true, checked: true });
+  }
+
+  if (!secretReady()) return fail("unavailable", 503);
 
   // One code per 30 s and 5 per hour for a number; 20 per hour per device.
   const ip = clientIp(request);

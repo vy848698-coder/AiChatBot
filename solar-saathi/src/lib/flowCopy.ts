@@ -14,7 +14,7 @@ export type FlowCopy = {
   next: string;
   netErr: string;
   otp: {
-    ask: string; verifiedThenEmail: string; wrong: string; tooMany: string; resent: string; resend: string; resendIn: string;
+    ask: string; verifiedThenEmail: string; savedThenEmail: string; checking: string; wrong: string; tooMany: string; resent: string; resend: string; resendIn: string;
     change: string; dev: string; expired: string; sending: string; hint: string; label: string; verify: string; verified: string;
   };
   mobErr: { invalid: string; wait: string; limit: string; unavailable: string };
@@ -74,6 +74,9 @@ export const FLOW: Record<Lang, FlowCopy> = {
     otp: {
       ask: "Thank you! I've sent a 6-digit code to {mobile}. Please enter it to verify your number.",
       verifiedThenEmail: "Perfect, your number is verified! Lastly, please share your email ID. I'll send your personal solar report there.",
+      // When the SMS code is switched off (NEXT_PUBLIC_SMS_OTP): number checked, not verified.
+      savedThenEmail: "Thank you, your number is saved! Lastly, please share your email ID. I'll send your personal solar report there.",
+      checking: "Checking the number…",
       wrong: "Hmm, that code doesn't match. Please check the SMS and try again.",
       tooMany: "That code didn't match a few times, so I've sent you a fresh one. Please enter the new code.",
       resent: "Done! I've sent a new code to your number.",
@@ -264,7 +267,7 @@ export const FLOW: Record<Lang, FlowCopy> = {
       thanks: "Thank you for choosing Clans Machina",
     },
     skip: {
-      say: "No problem, {first}. I've saved your solar plan, and our team will be happy to help whenever you're ready. You can tap Talk to an expert anytime.",
+      say: "No problem, {first}. I've saved your solar plan, and our team will be happy to help whenever you're ready.",
       title: "Your plan is saved",
     },
     expert: {
@@ -287,6 +290,8 @@ export const FLOW: Record<Lang, FlowCopy> = {
     otp: {
       ask: "धन्यवाद! मैंने {mobile} पर 6 अंकों का कोड भेजा है। नंबर वेरिफ़ाई करने के लिए वह कोड डालिए।",
       verifiedThenEmail: "बहुत बढ़िया, आपका नंबर वेरिफ़ाई हो गया! आख़िर में, अपनी ईमेल आईडी बताइए। मैं आपकी सोलर रिपोर्ट वहीं भेजूँगा।",
+      savedThenEmail: "धन्यवाद, आपका नंबर सेव हो गया! आख़िर में, अपनी ईमेल आईडी बताइए। मैं आपकी सोलर रिपोर्ट वहीं भेजूँगा।",
+      checking: "नंबर चेक कर रहा हूँ…",
       wrong: "यह कोड मैच नहीं हुआ। कृपया SMS चेक करके फिर से डालिए।",
       tooMany: "कोड कुछ बार मैच नहीं हुआ, इसलिए मैंने आपको नया कोड भेज दिया है। कृपया नया कोड डालिए।",
       resent: "हो गया! मैंने आपके नंबर पर नया कोड भेज दिया है।",
@@ -477,7 +482,7 @@ export const FLOW: Record<Lang, FlowCopy> = {
       thanks: "Clans Machina चुनने के लिए धन्यवाद",
     },
     skip: {
-      say: "कोई बात नहीं, {first}। मैंने आपका सोलर प्लान सेव कर लिया है। जब भी आप तैयार हों, हमारी टीम मदद के लिए हाज़िर है। आप कभी भी एक्सपर्ट से बात कर सकते हैं।",
+      say: "कोई बात नहीं, {first}। मैंने आपका सोलर प्लान सेव कर लिया है। जब भी आप तैयार हों, हमारी टीम मदद के लिए हाज़िर है।",
       title: "आपका प्लान सेव हो गया",
     },
     expert: {
@@ -500,6 +505,8 @@ export const FLOW: Record<Lang, FlowCopy> = {
     otp: {
       ask: "ଧନ୍ୟବାଦ। ମୁଁ {mobile} କୁ 6 ଅଙ୍କର ଏକ କୋଡ ପଠାଇଛି। ଆପଣଙ୍କ ନମ୍ବର ଯାଞ୍ଚ ପାଇଁ ସେହି କୋଡ ଦିଅନ୍ତୁ।",
       verifiedThenEmail: "ଆପଣଙ୍କ ନମ୍ବର ଯାଞ୍ଚ ହୋଇଗଲା। ଶେଷରେ, ଆପଣଙ୍କ ଇମେଲ ଆଇଡି ଦିଅନ୍ତୁ। ମୁଁ ସେଠାକୁ ଆପଣଙ୍କ ସୋଲାର ରିପୋର୍ଟ ପଠାଇବି।",
+      savedThenEmail: "ଧନ୍ୟବାଦ, ଆପଣଙ୍କ ନମ୍ବର ସେଭ ହୋଇଗଲା। ଶେଷରେ, ଆପଣଙ୍କ ଇମେଲ ଆଇଡି ଦିଅନ୍ତୁ। ମୁଁ ସେଠାକୁ ଆପଣଙ୍କ ସୋଲାର ରିପୋର୍ଟ ପଠାଇବି।",
+      checking: "ନମ୍ବର ଯାଞ୍ଚ କରୁଛି…",
       wrong: "ଏହି କୋଡ ଠିକ ନୁହେଁ। ଦୟାକରି ଯାଞ୍ଚ କରି ପୁଣି ଦିଅନ୍ତୁ।",
       tooMany: "କୋଡ କିଛି ଥର ମେଳ ଖାଇଲା ନାହିଁ, ତେଣୁ ମୁଁ ଆପଣଙ୍କୁ ନୂଆ କୋଡ ପଠାଇଦେଲି। ଦୟାକରି ନୂଆ କୋଡ ଦିଅନ୍ତୁ।",
       resent: "ମୁଁ ଆପଣଙ୍କ ନମ୍ବରକୁ ନୂଆ କୋଡ ପଠାଇଦେଲି।",
@@ -690,7 +697,7 @@ export const FLOW: Record<Lang, FlowCopy> = {
       thanks: "Clans Machina ବାଛିଥିବାରୁ ଧନ୍ୟବାଦ",
     },
     skip: {
-      say: "କିଛି ଅସୁବିଧା ନାହିଁ, {first}। ମୁଁ ଆପଣଙ୍କ ସୋଲାର ପ୍ଲାନ ସେଭ କରିଦେଲି। ଆପଣ ପ୍ରସ୍ତୁତ ହେଲେ ଆମ ଟିମ ସାହାଯ୍ୟ ପାଇଁ ପ୍ରସ୍ତୁତ। ଆପଣ ଯେକୌଣସି ସମୟରେ ବିଶେଷଜ୍ଞଙ୍କ ସହ କଥା ହୋଇପାରିବେ।",
+      say: "କିଛି ଅସୁବିଧା ନାହିଁ, {first}। ମୁଁ ଆପଣଙ୍କ ସୋଲାର ପ୍ଲାନ ସେଭ କରିଦେଲି। ଆପଣ ପ୍ରସ୍ତୁତ ହେଲେ ଆମ ଟିମ ସାହାଯ୍ୟ ପାଇଁ ପ୍ରସ୍ତୁତ।",
       title: "ଆପଣଙ୍କ ପ୍ଲାନ ସେଭ ହୋଇଗଲା",
     },
     expert: {

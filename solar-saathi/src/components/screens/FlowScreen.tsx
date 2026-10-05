@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { AnimatePresence, motion, useAnimate } from "motion/react";
 import { computeEstimate, rupees, type Category } from "@/lib/estimate";
+import { FAQ, matchFaq } from "@/lib/faq";
 import { FLOW, type FlowCopy } from "@/lib/flowCopy";
 import { STRINGS, fill, type Lang } from "@/lib/i18n";
 import { EMPTY_LEAD, saveLead, type Lead } from "@/lib/lead";
@@ -13,6 +14,7 @@ import { useSpeechInput } from "@/lib/useSpeechInput";
 import { cleanMobile, emailTypo, firstName, isArea, isEmail, isExactBill, isFakeMobile, isMobile, isName, isPin, tidyName } from "@/lib/validate";
 import { voice } from "@/lib/voice";
 import { BookedCard, ExpertSheet, ResultsCard, SavedCard } from "../flow/Cards";
+import { FaqCard, type FaqView } from "../flow/Faq";
 import { Busy, Chip, ChoiceGrid, DateChips, FieldInput, NextLabel, OtpBoxes, PrimaryButton, RangeSlider, RegionSelect, type DayOpt, type Option } from "../flow/Widgets";
 import type { MascotMood } from "../mascot/Mascot";
 import { AnswerCard, Caption, StageLayout } from "../StageLayout";
@@ -27,7 +29,8 @@ type NodeId =
   | "pin" | "region" | "area"
   | "own" | "ownerOk" | "ptype" | "roofType" | "bill" | "billExact" | "roof" | "goal" | "cuts" | "when" | "pay"
   | "calc" | "results"
-  | "mode" | "date" | "slot" | "booked" | "skip";
+  | "mode" | "date" | "slot" | "booked" | "skip"
+  | "faq";
 
 const SECTION: Record<NodeId, number> = {
   name: 0, mobile: 0, otp: 0, email: 0, emailOtp: 0, review: 0,
@@ -35,6 +38,7 @@ const SECTION: Record<NodeId, number> = {
   own: 2, ownerOk: 2, ptype: 2, roofType: 2, bill: 2, billExact: 2, roof: 2, goal: 2, cuts: 2, when: 2, pay: 2,
   calc: 3, results: 3,
   mode: 4, date: 4, slot: 4, booked: 4, skip: 4,
+  faq: 4,
 };
 
 // "n / total" shown on the card (follow-ups share their parent's number).
@@ -56,6 +60,10 @@ const CHOICE_ICONS: Record<string, string> = {
   call: "📞", visit: "🏠", online: "💻",
 };
 const SLOT_HOUR = { s1: 10, s2: 12, s3: 14, s4: 16 } as const;
+// SMS code for the mobile (paid per SMS): on only with NEXT_PUBLIC_SMS_OTP=on.
+// Off: the server still checks the number is a real Indian mobile, then the
+// user goes straight to the email step. The server reads the same switch.
+const SMS_OTP = process.env.NEXT_PUBLIC_SMS_OTP === "on";
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 // The two verification codes: SMS to the mobile, and email.
 type CodeKind = "tel" | "mail";
@@ -67,7 +75,7 @@ function nextNode(id: NodeId, l: Lead, editing: boolean): NodeId {
   const societyRoof = l.ptype === "flat" && l.roofType === "society";
   switch (id) {
     case "name": return editing ? "review" : "mobile";
-    case "mobile": return "otp";
+    case "mobile": return SMS_OTP ? "otp" : editing ? "review" : "email";
     case "otp": return editing ? "review" : "email";
     case "email": return "emailOtp";
     case "emailOtp": return "review";
@@ -137,6 +145,25 @@ const CHOICE_FIELD: Partial<Record<NodeId, keyof Lead>> = {
   own: "own", ownerOk: "ownerOk", ptype: "ptype", roofType: "roofType", goal: "goal", cuts: "cuts", when: "when", pay: "pay", mode: "mode", slot: "slot",
 };
 
+// What Saathi says on each FAQ screen.
+function faqLine(v: FaqView, lang: Lang) {
+  const c = FAQ[lang];
+  switch (v.kind) {
+    case "home": return c.ui.intro;
+    case "topic": return c.ui.topicSay;
+    case "answer": return c.items[v.id].a;
+    case "suggest": return c.ui.suggest;
+    case "none": return c.ui.noMatch;
+  }
+}
+
+// The scrolling column the cards sit in: back to the top for a new FAQ screen.
+function scrollStageTop() {
+  let el = document.querySelector("[data-node]")?.parentElement ?? null;
+  while (el && !/(auto|scroll)/.test(getComputedStyle(el).overflowY)) el = el.parentElement;
+  el?.scrollTo({ top: 0, behavior: "smooth" });
+}
+
 // Voice answer for option cards: match the transcript against the option
 // labels in the current language and in English.
 function matchOption(transcript: string, opts: Option[], en: Record<string, string>) {
@@ -193,6 +220,8 @@ export function FlowScreen({
   const [shake, setShake] = useState(0);
   const [emailFix, setEmailFix] = useState<string | null>(null);
   const [devCode, setDevCode] = useState<string | null>(null);
+  const [faqView, setFaqView] = useState<FaqView>({ kind: "home" });
+  const [faqSeq, setFaqSeq] = useState(0);
 
   const nodeRef = useRef<NodeId>("name");
   const leadRef = useRef<Lead>(EMPTY_LEAD);
@@ -207,6 +236,8 @@ export function FlowScreen({
   const codeTicket = useRef<Record<CodeKind, string>>({ tel: "", mail: "" });
   const codeSent = useRef<Partial<Record<CodeKind, { to: string; at: number; used: boolean }>>>({});
   const started = useRef(false);
+  const faqViewRef = useRef<FaqView>({ kind: "home" });
+  const faqStack = useRef<FaqView[]>([]); // earlier FAQ screens, for Back
   const inputRef = useRef<HTMLInputElement>(null);
   const speaking = useSyncExternalStore(voice.subscribe, () => voice.speaking, () => false);
   const mic = useSpeechInput(lang);
@@ -251,7 +282,8 @@ export function FlowScreen({
         return { text: how === "fwd" ? fill(t.nameAck, { name: L.name, first }) : how === "edit" ? t.editAsk.mobile : t.ask.mobile };
       case "otp":
         return { text: fill(f.otp.ask, { mobile: displayMobile(L.mobile) }), spoken: fill(f.otp.ask, { mobile: spokenMobile(L.mobile) }) };
-      case "email": return { text: how === "fwd" ? f.otp.verifiedThenEmail : how === "edit" ? t.editAsk.email : t.ask.email };
+      case "email":
+        return { text: how === "fwd" ? (SMS_OTP ? f.otp.verifiedThenEmail : f.otp.savedThenEmail) : how === "edit" ? t.editAsk.email : t.ask.email };
       case "emailOtp":
         return { text: fill(f.emailOtp.ask, { email: L.email }), spoken: fill(f.emailOtp.ask, { email: spokenEmail(L.email, lang) }) };
       case "review":
@@ -294,18 +326,18 @@ export function FlowScreen({
       case "slot": return { text: f.slot.ask };
       case "booked": {
         const dateLabel = L.date ? new Date(`${L.date}T00:00`).toLocaleDateString(loc, { weekday: "long", day: "numeric", month: "long" }) : "";
-        return {
-          text: fill(f.booked.say, {
-            first,
-            // "your free site visit" reads better than "your free Site visit"
-            mode: L.mode ? (lang === "en" ? f.mode.opts[L.mode].toLowerCase() : f.mode.opts[L.mode]) : "",
-            date: dateLabel,
-            slot: L.slot ? f.slot.opts[L.slot] : "",
-            district: L.district ?? "",
-          }),
-        };
+        const said = fill(f.booked.say, {
+          first,
+          // "your free site visit" reads better than "your free Site visit"
+          mode: L.mode ? (lang === "en" ? f.mode.opts[L.mode].toLowerCase() : f.mode.opts[L.mode]) : "",
+          date: dateLabel,
+          slot: L.slot ? f.slot.opts[L.slot] : "",
+          district: L.district ?? "",
+        });
+        return { text: `${said} ${FAQ[lang].hub.say}` };
       }
-      case "skip": return { text: fill(f.skip.say, { first }) };
+      case "skip": return { text: `${fill(f.skip.say, { first })} ${FAQ[lang].hub.say}` };
+      case "faq": return { text: FAQ[lang].ui.intro };
     }
   }
 
@@ -482,7 +514,7 @@ export function FlowScreen({
       // Same number again soon after ("Change number" by mistake): the code
       // already sent is still valid, so don't send another.
       const last = codeSent.current.tel;
-      if (last && last.to === d && !last.used && stillValid(last.at)) return advance({ mobile: d, otpVerified: false, mobileProof: undefined });
+      if (SMS_OTP && last && last.to === d && !last.used && stillValid(last.at)) return advance({ mobile: d, otpVerified: false, mobileProof: undefined });
       // The server checks the number is a real mobile, then sends the SMS.
       if (busy) return;
       setMood("thinking");
@@ -655,6 +687,9 @@ export function FlowScreen({
     voice.stop();
     mic.stop();
     sfx.tap();
+    // Inside the FAQ, Back steps through the FAQ screens first.
+    const faqPrev = nodeRef.current === "faq" ? faqStack.current.pop() : undefined;
+    if (faqPrev) return showFaq(faqPrev, false);
     let prev = history.current.pop();
     // A code can't be entered twice: going back skips to the number/email.
     const skipped = prev === "otp" || prev === "emailOtp" ? prev : null;
@@ -676,6 +711,51 @@ export function FlowScreen({
     goTo(id, "edit");
   };
 
+  // ── FAQ assistant ──
+  const showFaq = (v: FaqView, push = true) => {
+    if (push) faqStack.current.push(faqViewRef.current);
+    faqViewRef.current = v;
+    setFaqView(v);
+    setFaqSeq((n) => n + 1);
+    setDraft("");
+    mic.stop();
+    void say(faqLine(v, lang));
+    setTimeout(scrollStageTop, 180); // after the old card has faded out
+  };
+
+  const openFaq = () => {
+    sfx.tap();
+    faqStack.current = [];
+    faqViewRef.current = { kind: "home" };
+    setFaqView({ kind: "home" });
+    goTo("faq");
+  };
+
+  // Kept on the lead so the sales team sees what the customer wanted to know.
+  const noteQuestion = (q: string) => {
+    const asked = leadRef.current.faq ?? [];
+    if (asked[asked.length - 1] !== q) update({ faq: [...asked, q].slice(-20) });
+  };
+
+  const askFaq = (text: string) => {
+    const q = text.trim().replace(/\s+/g, " ");
+    if (!q) return;
+    noteQuestion(q);
+    const m = matchFaq(q);
+    if (m.kind === "answer") {
+      sfx.pop();
+      return showFaq({ kind: "answer", id: m.id });
+    }
+    sfx.tap();
+    showFaq(m.kind === "suggest" ? { kind: "suggest", ids: m.ids, asked: q } : { kind: "none", asked: q });
+  };
+
+  const pickQuestion = (id: string) => {
+    sfx.select();
+    noteQuestion(FAQ.en.items[id].q);
+    showFaq({ kind: "answer", id });
+  };
+
   const onMic = (onText: (s: string) => void) => {
     if (mic.listening) return mic.stop();
     sfx.tap();
@@ -684,7 +764,7 @@ export function FlowScreen({
       if (final) {
         setMood("idle");
         onText(text);
-      } else if (["name", "mobile", "email", "pin", "area", "billExact"].includes(nodeRef.current)) {
+      } else if (["name", "mobile", "email", "pin", "area", "billExact", "faq"].includes(nodeRef.current)) {
         setDraft(nodeRef.current === "mobile" ? cleanMobile(text) : text);
       }
     });
@@ -751,6 +831,8 @@ export function FlowScreen({
       L.district ? `Location: ${[L.area, L.district, L.state, L.pin].filter(Boolean).join(", ")}.` : "",
       L.bill ? `Monthly bill: ${rupees(L.bill)}.` : "",
       L.ptype ? `Property: ${FLOW.en.ptype.opts[L.ptype]}.` : "",
+      L.bookingId && L.mode && L.slot ? `Booked: free ${FLOW.en.mode.opts[L.mode].toLowerCase()} on ${L.date}, ${FLOW.en.slot.opts[L.slot]} (ID ${L.bookingId}).` : "",
+      L.faq?.length ? `My questions: ${L.faq.slice(-5).join(" | ")}.` : "",
       "I'd like to know more about rooftop solar.",
     ]
       .filter(Boolean)
@@ -761,7 +843,7 @@ export function FlowScreen({
   const label = step ? `${step[0]} / ${step[1]}` : undefined;
   const section = SECTION[node];
   const progress = step ? (step[0] - 1) / step[1] + (picked ? 1 / step[1] : 0) : node === "results" || node === "calc" ? 0.5 : 1;
-  const tall = node === "results" || node === "booked" || node === "review" || node === "date" || node === "region";
+  const tall = ["results", "booked", "skip", "faq", "review", "date", "region"].includes(node);
   const resendLeft = Math.max(0, Math.ceil((resendAt - clock) / 1000));
   const iconCls = "h-5 w-5";
 
@@ -872,7 +954,7 @@ export function FlowScreen({
                   ))}
                 </div>
               )}
-              <Busy show={busy}>{node === "email" ? f.emailOtp.sending : node === "mobile" ? f.otp.sending : f.pin.looking}</Busy>
+              <Busy show={busy}>{node === "email" ? f.emailOtp.sending : node === "mobile" ? (SMS_OTP ? f.otp.sending : f.otp.checking) : f.pin.looking}</Busy>
               <div className="mt-3">
                 <PrimaryButton type="submit" disabled={!draft.trim() || busy}>
                   <NextLabel label={f.next} />
@@ -1118,14 +1200,45 @@ export function FlowScreen({
               modeLabel={lead.mode ? f.mode.opts[lead.mode] : ""}
               dateLabel={lead.date ? new Date(`${lead.date}T00:00`).toLocaleDateString(loc, { weekday: "long", day: "numeric", month: "long" }) : ""}
               slotLabel={lead.slot ? f.slot.opts[lead.slot] : ""}
-              onExpert={() => setExpert(true)}
+              onFaq={openFaq}
+              summary={summary}
             />
           </AnswerCard>
         );
       case "skip":
         return (
           <AnswerCard>
-            <SavedCard lang={lang} onExpert={() => setExpert(true)} />
+            <SavedCard lang={lang} onFaq={openFaq} summary={summary} />
+          </AnswerCard>
+        );
+      case "faq":
+        return (
+          <AnswerCard>
+            <FaqCard
+              lang={lang}
+              view={faqView}
+              draft={draft}
+              onDraft={setDraft}
+              onAsk={askFaq}
+              onTopic={(topic) => {
+                sfx.select();
+                showFaq({ kind: "topic", topic });
+              }}
+              onQuestion={pickQuestion}
+              onHome={() => {
+                sfx.tap();
+                showFaq({ kind: "home" });
+              }}
+              onExpert={() => setExpert(true)}
+              inputRef={inputRef}
+              mic={{
+                supported: mic.supported,
+                listening: mic.listening,
+                label: t.speak,
+                listeningLabel: t.listening,
+                onClick: () => onMic(askFaq),
+              }}
+            />
           </AnswerCard>
         );
       default:
@@ -1140,6 +1253,7 @@ export function FlowScreen({
         sections={f.sections}
         section={section}
         progress={progress}
+        title={node === "faq" ? FAQ[lang].ui.title : undefined}
         muted={muted}
         expertLabel={f.expert.button}
         onBack={back}
@@ -1155,7 +1269,7 @@ export function FlowScreen({
         >
           <AnimatePresence mode="wait">
             <motion.div
-              key={node}
+              key={node === "faq" ? `faq-${faqSeq}` : node}
               data-node={node}
               initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}

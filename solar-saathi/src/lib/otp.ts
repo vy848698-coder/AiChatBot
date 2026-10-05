@@ -29,6 +29,18 @@ function getSecret() {
   return (store.secret = randomBytes(32).toString("hex"));
 }
 
+// Checked before any code is sent, so a missing secret never leaves the user
+// with an SMS or email that the app can't then verify.
+export function secretReady() {
+  try {
+    getSecret();
+    return true;
+  } catch {
+    console.error("[otp] OTP_SECRET is not set (needs 32+ random characters): no codes can be sent");
+    return false;
+  }
+}
+
 const sign = (data: string) => createHmac("sha256", getSecret()).update(data).digest("base64url");
 const b64 = (o: unknown) => Buffer.from(JSON.stringify(o)).toString("base64url");
 

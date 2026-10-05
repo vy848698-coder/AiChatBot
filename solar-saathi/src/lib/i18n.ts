@@ -16,6 +16,12 @@ export const LANGS: {
   { code: "en", native: "English", english: "English", hello: "Hello", glyph: "En", bcp: "en-IN" },
 ];
 
+// Languages offered on the first page. Odia is fully written (copy, FAQ,
+// voice set-up) but held back until the client asks for it (Oct 2026):
+// add "or" here to bring it back.
+export const LIVE_LANGS: Lang[] = ["hi", "en"];
+export const PICKABLE = LANGS.filter((l) => LIVE_LANGS.includes(l.code));
+
 export const bcpOf = (lang: Lang) => LANGS.find((l) => l.code === lang)!.bcp;
 
 // First page, shown before a language is chosen.

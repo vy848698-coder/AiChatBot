@@ -9,7 +9,7 @@ const deva = Noto_Sans_Devanagari({ subsets: ["devanagari"], variable: "--font-d
 
 export const metadata: Metadata = {
   title: "Solar Saathi · Clans Machina",
-  description: "Your AI solar friend. Get a personalised rooftop solar plan in Odia, Hindi or English.",
+  description: "Your AI solar friend. Get a personalised rooftop solar plan in Hindi or English.",
 };
 
 export const viewport: Viewport = {
