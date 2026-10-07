@@ -16,6 +16,8 @@ npm run dev                  # http://localhost:3005 · phones on the same Wi-Fi
 
 The whole customer journey from the client brief (PDF §1–5), with Saathi (a 3D robot, 2D fallback without WebGL) speaking every step in Odia / Hindi / English:
 
+The email is optional: **Skip this step** (email step) or **Skip email** (code step) goes straight to the review, where the email shows "Not given" with **+ Add**. The lead still reaches the owner: the server signs the checked mobile number as proof (`mobileCheck`), and reports say "Email: Not given (skipped)".
+
 | Section | Steps (follow-ups only when they apply) |
 |---|---|
 | Welcome | Fly-in, silent hello (aloud after first tap), language choice |

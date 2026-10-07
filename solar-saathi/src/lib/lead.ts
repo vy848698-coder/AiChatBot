@@ -10,6 +10,7 @@ export type Lead = {
   email: string;
   otpVerified?: boolean;
   mobileProof?: string; // signed by the server when the SMS code matched
+  mobileCheck?: string; // signed by the server when the number passed its checks (SMS code off)
   emailVerified?: boolean;
   emailProof?: string; // signed by the server when the email code matched
   pin?: string;

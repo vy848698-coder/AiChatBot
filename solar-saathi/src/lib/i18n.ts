@@ -45,6 +45,8 @@ type Dict = {
     nameAck: string;
     mobileAck: string;
     confirm: string;
+    confirmNoEmail: string; // review line when the email was skipped
+    skip: string; skipEmail: string; notGiven: string; add: string;
     confirmAsk: string;
     confirmTitle: string;
     ask: Record<Field, string>;
@@ -89,6 +91,11 @@ export const STRINGS: Record<Lang, Dict> = {
       mobileAck: "Thank you. I have noted your mobile number as {mobile}. Lastly, please enter your email ID. I will send your solar report there.",
       confirm: "Thank you! Please check your details once. Name: {name}. Mobile: {mobile}. Email: {email}. Is everything correct?",
       confirmAsk: "Thank you! Please check your details once. Is everything correct?",
+      confirmNoEmail: "Thank you! Please check your details once. Name: {name}. Mobile: {mobile}. Is everything correct?",
+      skip: "Skip this step",
+      skipEmail: "Skip email",
+      notGiven: "Not given",
+      add: "Add",
       confirmTitle: "Your details",
       ask: { name: "What is your full name?", mobile: "Please enter your 10-digit mobile number.", email: "Please enter your email ID." },
       yes: "Yes, all correct",
@@ -141,6 +148,11 @@ export const STRINGS: Record<Lang, Dict> = {
       mobileAck: "धन्यवाद। मैंने आपका मोबाइल नंबर {mobile} लिख लिया है। आख़िर में, अपनी ईमेल आईडी डालिए। मैं आपकी सोलर रिपोर्ट वहीं भेजूँगा।",
       confirm: "धन्यवाद! एक बार अपनी डिटेल्स चेक कर लीजिए। नाम: {name}। मोबाइल: {mobile}। ईमेल: {email}। क्या सब सही है?",
       confirmAsk: "धन्यवाद! एक बार अपनी डिटेल्स चेक कर लीजिए। क्या सब सही है?",
+      confirmNoEmail: "धन्यवाद! एक बार अपनी डिटेल्स चेक कर लीजिए। नाम: {name}। मोबाइल: {mobile}। क्या सब सही है?",
+      skip: "यह स्टेप छोड़ें",
+      skipEmail: "ईमेल छोड़ें",
+      notGiven: "नहीं दी गई",
+      add: "जोड़ें",
       confirmTitle: "आपकी डिटेल्स",
       ask: { name: "आपका पूरा नाम क्या है?", mobile: "अपना 10 अंकों का मोबाइल नंबर डालिए।", email: "अपनी ईमेल आईडी डालिए।" },
       yes: "हाँ, सब सही है",
@@ -193,6 +205,11 @@ export const STRINGS: Record<Lang, Dict> = {
       mobileAck: "ଧନ୍ୟବାଦ। ମୁଁ ଆପଣଙ୍କ ମୋବାଇଲ ନମ୍ବର {mobile} ଲେଖିନେଲି। ଶେଷରେ, ଆପଣଙ୍କ ଇମେଲ ଆଇଡି ଦିଅନ୍ତୁ। ମୁଁ ସେଠାକୁ ଆପଣଙ୍କ ସୋଲାର ରିପୋର୍ଟ ପଠାଇବି।",
       confirm: "ଥରେ ଆପଣଙ୍କ ସୂଚନା ଯାଞ୍ଚ କରନ୍ତୁ। ନାମ: {name}। ମୋବାଇଲ ନମ୍ବର: {mobile}। ଇମେଲ ଆଇଡି: {email}। ସବୁ ଠିକ ଅଛି କି?",
       confirmAsk: "ଥରେ ଆପଣଙ୍କ ସୂଚନା ଯାଞ୍ଚ କରନ୍ତୁ। ସବୁ ଠିକ ଅଛି କି?",
+      confirmNoEmail: "ଥରେ ଆପଣଙ୍କ ସୂଚନା ଯାଞ୍ଚ କରନ୍ତୁ। ନାମ: {name}। ମୋବାଇଲ ନମ୍ବର: {mobile}। ସବୁ ଠିକ ଅଛି କି?",
+      skip: "ଏହି ପଦକ୍ଷେପ ଛାଡନ୍ତୁ",
+      skipEmail: "ଇମେଲ ଛାଡନ୍ତୁ",
+      notGiven: "ଦିଆଯାଇନାହିଁ",
+      add: "ଯୋଡନ୍ତୁ",
       confirmTitle: "ଆପଣଙ୍କ ସୂଚନା",
       ask: { name: "ଆପଣଙ୍କ ପୂରା ନାମ କ'ଣ?", mobile: "ଆପଣଙ୍କ 10 ଅଙ୍କର ମୋବାଇଲ ନମ୍ବର ଦିଅନ୍ତୁ।", email: "ଆପଣଙ୍କ ଇମେଲ ଆଇଡି ଦିଅନ୍ତୁ।" },
       yes: "ହଁ, ସବୁ ଠିକ ଅଛି",

@@ -105,7 +105,7 @@ function nextNode(id: NodeId, l: Lead, editing: boolean): NodeId {
 
 // Fields a step owns: cleared when the user goes back to it.
 const CLEARS: Partial<Record<NodeId, (keyof Lead)[]>> = {
-  name: ["name"], mobile: ["mobile", "otpVerified", "mobileProof"], otp: ["otpVerified", "mobileProof"], email: ["email", "emailVerified", "emailProof"],
+  name: ["name"], mobile: ["mobile", "otpVerified", "mobileProof", "mobileCheck"], otp: ["otpVerified", "mobileProof"], email: ["email", "emailVerified", "emailProof"],
   emailOtp: ["emailVerified", "emailProof"],
   pin: ["pin", "state", "district", "area"], region: ["state", "district"], area: ["area"],
   own: ["own", "ownerOk"], ownerOk: ["ownerOk"], ptype: ["ptype", "roofType"], roofType: ["roofType"],
@@ -278,13 +278,18 @@ export function FlowScreen({
       case "otp":
         return { text: fill(f.otp.ask, { mobile: displayMobile(L.mobile) }), spoken: fill(f.otp.ask, { mobile: spokenMobile(L.mobile) }) };
       case "email":
-        return { text: how === "fwd" ? (SMS_OTP ? f.otp.verifiedThenEmail : f.otp.savedThenEmail) : how === "edit" ? t.editAsk.email : t.ask.email };
+        return {
+          // "again" only if there was an email before (not when adding a skipped one)
+          text: how === "fwd" ? (SMS_OTP ? f.otp.verifiedThenEmail : f.otp.savedThenEmail) : how === "edit" && L.email ? t.editAsk.email : t.ask.email,
+        };
       case "emailOtp":
         return { text: fill(f.emailOtp.ask, { email: L.email }), spoken: fill(f.emailOtp.ask, { email: spokenEmail(L.email, lang) }) };
       case "review":
         return {
           text: t.confirmAsk,
-          spoken: fill(t.confirm, { name: L.name, mobile: spokenMobile(L.mobile), email: spokenEmail(L.email, lang) }),
+          spoken: L.email
+            ? fill(t.confirm, { name: L.name, mobile: spokenMobile(L.mobile), email: spokenEmail(L.email, lang) })
+            : fill(t.confirmNoEmail, { name: L.name, mobile: spokenMobile(L.mobile) }),
         };
       case "pin": return { text: fill(f.pin.ask, { first }) };
       case "region":
@@ -514,6 +519,18 @@ export function FlowScreen({
     goTo(nxt, "fwd", reactionFor(cur, leadRef.current, f.react));
   };
 
+  // "Skip" on the email or email-code step: no email, straight to the review.
+  // The lead still reaches the owner (the checked mobile is its proof).
+  const skipEmail = () => {
+    if (busy) return;
+    mic.stop();
+    sfx.tap();
+    setDevCode(null);
+    editing.current = false;
+    update({ email: "", emailVerified: false, emailProof: undefined });
+    goTo("review", "fwd", f.react.emailSkipped);
+  };
+
   // ── step handlers ──
   // `typed` replaces the field's text, e.g. when a suggestion chip is tapped.
   const submitText = async (typed?: string) => {
@@ -543,7 +560,7 @@ export function FlowScreen({
       setMood("idle");
       if (nodeRef.current !== "mobile") return;
       if (!res.ok) return fail(sendError("tel", res), sendError("tel", res, true));
-      return advance({ mobile: d, otpVerified: false, mobileProof: undefined });
+      return advance({ mobile: d, otpVerified: false, mobileProof: undefined, mobileCheck: res.proof });
     }
     if (id === "email") {
       const v = raw.trim().toLowerCase();
@@ -604,7 +621,7 @@ export function FlowScreen({
     }
   };
 
-  type SendRes = { ok: boolean; ticket?: string; resendAfter?: number; devCode?: string; error?: string; retryAfter?: number };
+  type SendRes = { ok: boolean; ticket?: string; resendAfter?: number; devCode?: string; error?: string; retryAfter?: number; proof?: string };
 
   // Asks the server to text or email a code; keeps the signed ticket.
   const sendCode = async (kind: CodeKind, to: string): Promise<SendRes> => {
@@ -977,6 +994,11 @@ export function FlowScreen({
                   <NextLabel label={f.next} />
                 </PrimaryButton>
               </div>
+              {node === "email" && (
+                <button type="button" onClick={skipEmail} disabled={busy} className="mx-auto mt-2 block px-3 py-1.5 text-[13.5px] font-semibold text-white/60 hover:text-white disabled:opacity-40">
+                  {t.skip}
+                </button>
+              )}
             </form>
           </AnswerCard>
         );
@@ -1063,6 +1085,10 @@ export function FlowScreen({
                 {resendLeft > 0 ? fill(f.otp.resendIn, { s: resendLeft }) : f.otp.resend}
               </button>
             </div>
+            {/* The code didn't come? They can go on without an email. */}
+            <button onClick={skipEmail} disabled={busy} className="mx-auto mt-2 block px-3 py-1.5 text-[13px] font-semibold text-white/55 hover:text-white disabled:opacity-40">
+              {t.skipEmail}
+            </button>
           </AnswerCard>
         );
       case "review":
@@ -1085,19 +1111,33 @@ export function FlowScreen({
                         </span>
                       )}
                     </span>
-                    <span className={`mt-0.5 block leading-snug font-semibold break-words text-white ${k === "email" ? "text-[14.5px]" : "text-[15.5px]"}`} lang={k === "name" ? undefined : "en"}>
-                      {k === "mobile" ? displayMobile(lead.mobile) : k === "email" ? <EmailText email={lead.email} /> : lead.name}
-                    </span>
+                    {k === "email" && !lead.email ? (
+                      // Skipped: say so plainly; the button beside it adds one.
+                      <span className="mt-0.5 block text-[15px] font-medium text-ink-3">{t.notGiven}</span>
+                    ) : (
+                      <span className={`mt-0.5 block leading-snug font-semibold break-words text-white ${k === "email" ? "text-[14.5px]" : "text-[15.5px]"}`} lang={k === "name" ? undefined : "en"}>
+                        {k === "mobile" ? displayMobile(lead.mobile) : k === "email" ? <EmailText email={lead.email} /> : lead.name}
+                      </span>
+                    )}
                   </span>
-                  {/* Icon only on narrow phones, so the value gets the width. */}
-                  <button
-                    onClick={() => editField(k)}
-                    aria-label={`${t.edit} ${t.labels[k]}`}
-                    className="flex shrink-0 items-center gap-1 rounded-full p-2 text-[12.5px] font-semibold whitespace-nowrap text-brand hover:bg-brand/10 min-[400px]:px-2.5 min-[400px]:py-1.5"
-                  >
-                    <IconEdit className="h-4 w-4 min-[400px]:h-3.5 min-[400px]:w-3.5" />
-                    <span className="hidden min-[400px]:inline">{t.edit}</span>
-                  </button>
+                  {k === "email" && !lead.email ? (
+                    <button
+                      onClick={() => editField(k)}
+                      className="flex shrink-0 items-center gap-1 rounded-full border border-brand/40 px-3 py-1.5 text-[12.5px] font-semibold whitespace-nowrap text-brand hover:bg-brand/10"
+                    >
+                      + {t.add}
+                    </button>
+                  ) : (
+                    // Icon only on narrow phones, so the value gets the width.
+                    <button
+                      onClick={() => editField(k)}
+                      aria-label={`${t.edit} ${t.labels[k]}`}
+                      className="flex shrink-0 items-center gap-1 rounded-full p-2 text-[12.5px] font-semibold whitespace-nowrap text-brand hover:bg-brand/10 min-[400px]:px-2.5 min-[400px]:py-1.5"
+                    >
+                      <IconEdit className="h-4 w-4 min-[400px]:h-3.5 min-[400px]:w-3.5" />
+                      <span className="hidden min-[400px]:inline">{t.edit}</span>
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>

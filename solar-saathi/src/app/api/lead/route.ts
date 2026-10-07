@@ -1,8 +1,9 @@
 // POST { stage: "plan" | "booked", lead, lang } → the lead to the owner, by
 // WhatsApp (CallMeBot) and email (designed report, email/leadEmail.ts).
 // Sent when the customer sees their plan, and again when they book.
-// Only for verified customers (the server-signed emailProof must match), so
-// nobody can use this to spam the owner's WhatsApp. Every field is checked
+// Only with a proof this server signed during the journey (verified email, or
+// the checked mobile when the email was skipped), so nobody can use this to
+// spam the owner's WhatsApp or inbox. Every field is checked
 // against the allowed answers, and the plan is recalculated from the answers.
 
 import { sendLeadEmail } from "@/lib/email/leadEmail";
@@ -30,13 +31,14 @@ function cleanLead(raw: Record<string, unknown>): Lead {
   const mobile = typeof raw.mobile === "string" && /^[6-9]\d{9}$/.test(raw.mobile) ? raw.mobile : "";
   const state = typeof raw.state === "string" && raw.state in REGIONS ? raw.state : undefined;
   const district = state && typeof raw.district === "string" && REGIONS[state].includes(raw.district) ? raw.district : undefined;
+  const email = typeof raw.email === "string" ? raw.email.trim().toLowerCase().slice(0, 80) : "";
   return {
     name: str(raw.name, 60),
     mobile,
-    email: typeof raw.email === "string" ? raw.email.trim().toLowerCase().slice(0, 80) : "",
+    email: isEmail(email) ? email : "", // may be empty: the customer skipped it
     // A "verified" flag counts only with the server's own signed proof.
     otpVerified: typeof raw.mobileProof === "string" && !!mobile && checkProof(`tel:${mobile}`, raw.mobileProof),
-    emailVerified: true, // checked by the caller
+    emailVerified: typeof raw.emailProof === "string" && isEmail(email) && checkProof(`mail:${email}`, raw.emailProof),
     pin: typeof raw.pin === "string" && /^[1-8]\d{5}$/.test(raw.pin) ? raw.pin : undefined,
     state,
     district,
@@ -70,14 +72,19 @@ export async function POST(request: Request) {
   const lang: Lang = body.lang === "hi" || body.lang === "or" ? body.lang : "en";
   const lead = cleanLead(raw);
 
-  if (!stage || !lead.name || !lead.mobile || !isEmail(lead.email)) return Response.json({ ok: false, error: "invalid" }, { status: 400 });
-  if (typeof raw.emailProof !== "string" || !checkProof(`mail:${lead.email}`, raw.emailProof)) {
+  if (!stage || !lead.name || !lead.mobile) return Response.json({ ok: false, error: "invalid" }, { status: 400 });
+  // Proof the customer really went through Saathi (signed by this server): a
+  // verified email, a verified mobile, or a mobile that passed our checks
+  // (customers who skipped the email).
+  const mobileChecked = typeof raw.mobileCheck === "string" && checkProof(`chk:tel:${lead.mobile}`, raw.mobileCheck);
+  if (!lead.emailVerified && !lead.otpVerified && !mobileChecked) {
     return Response.json({ ok: false, error: "unverified" }, { status: 403 });
   }
+  if (!lead.emailVerified) lead.email = ""; // an unverified address isn't passed on as theirs
   if (stage === "booked" && !lead.bookingId) return Response.json({ ok: false, error: "invalid" }, { status: 400 });
 
   // A journey sends 2 alerts (plan, booking), a few more if answers change.
-  for (const [key, limit] of [[`lead|${clientIp(request)}`, 20], [`leadm|${lead.email}`, 8]] as const) {
+  for (const [key, limit] of [[`lead|${clientIp(request)}`, 20], [`leadm|${lead.mobile}`, 8]] as const) {
     const r = rateLimit(key, limit, 3600_000);
     if (!r.ok) return Response.json({ ok: false, error: "limit" }, { status: 429 });
   }

@@ -128,7 +128,7 @@ ${
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
 ${button(`tel:+91${r.mobile}`, "📞 Call", "#22b574", "#05140c")}
 ${button(`https://wa.me/91${r.mobile}`, "💬 WhatsApp", "#25d366", "#062b14")}
-${button(`mailto:${r.email}`, "✉️ Email", "#eef3f1", "#10201a")}
+${r.email ? button(`mailto:${r.email}`, "✉️ Email", "#eef3f1", "#10201a") : ""}
 </tr></table>
 </td></tr>
 
@@ -150,7 +150,7 @@ ${sections.join("")}
 <tr><td bgcolor="#f4f7f6" style="background:#f4f7f6;border-radius:0 0 22px 22px;padding:18px 28px;font-size:13px;line-height:1.6;color:#6b7c75;">
 Sent automatically by Solar Saathi ${booked ? "when the customer booked a consultation" : "when the customer saw their solar plan"}. The customer chatted in ${esc(r.langName)}.<br>
 Plan figures come from the Clans Machina calculator; the final price follows the site survey.<br>
-Reply to this email to write to the customer directly. · Office: <a href="tel:${PHONE.tel}" style="color:#1fa971;text-decoration:none;">${PHONE.show}</a>
+${r.email ? "Reply to this email to write to the customer directly. · " : ""}Office: <a href="tel:${PHONE.tel}" style="color:#1fa971;text-decoration:none;">${PHONE.show}</a>
 </td></tr>
 
 </table>

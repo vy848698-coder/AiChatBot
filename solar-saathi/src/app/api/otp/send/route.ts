@@ -7,7 +7,7 @@
 // The ticket is signed; it holds a hash of our code, or the SMS provider's
 // reference when the provider made the code.
 
-import { CODE_TTL_MS, issueTicket, newCode, secretReady } from "@/lib/otp";
+import { CODE_TTL_MS, issueTicket, newCode, proofFor, secretReady } from "@/lib/otp";
 import { checkMobile } from "@/lib/phone/check";
 import { sendSmsCode, smsMode, smsOtpOn } from "@/lib/phone/sms";
 import { clientIp, isTestRequest, rateLimit, undoHit } from "@/lib/rateLimit";
@@ -34,7 +34,9 @@ export async function POST(request: Request) {
   if (!smsOtpOn()) {
     const r = rateLimit(`mobchk|${clientIp(request)}`, 60, 3600_000);
     if (!r.ok) return fail("limit", 429, { retryAfter: r.retryAfter });
-    return Response.json({ ok: true, checked: true });
+    // Signed "this number passed our checks": lets the lead reach the owner
+    // even if the customer skips the email (api/lead accepts it as proof).
+    return Response.json({ ok: true, checked: true, proof: secretReady() ? proofFor(`chk:tel:${mobile}`) : undefined });
   }
 
   if (!secretReady()) return fail("unavailable", 503);

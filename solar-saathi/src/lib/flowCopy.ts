@@ -38,7 +38,7 @@ export type FlowCopy = {
   pay: { ask: string; opts: Opts<"full" | "bank" | "emi" | "guide"> };
   // Saathi's reaction to an answer, said just before the next question.
   react: {
-    emailVerified: string;
+    emailVerified: string; emailSkipped: string;
     own: string; ownerYes: string; ownerNo: string;
     house: string; flat: string; commercial: string; industrial: string;
     roofOwn: string; roofSociety: string;
@@ -189,6 +189,7 @@ export const FLOW: Record<Lang, FlowCopy> = {
     },
     react: {
       emailVerified: "Great, your email is verified!",
+      emailSkipped: "No problem, we'll skip the email.",
       own: "Wonderful! Owning your home makes solar simple.",
       ownerYes: "Great, that makes things easy.",
       ownerNo: "No problem. Our team can guide you on getting the owner's consent.",
@@ -406,6 +407,7 @@ export const FLOW: Record<Lang, FlowCopy> = {
     },
     react: {
       emailVerified: "बढ़िया, आपकी ईमेल वेरिफ़ाई हो गई!",
+      emailSkipped: "कोई बात नहीं, ईमेल छोड़ देते हैं।",
       own: "बहुत बढ़िया! अपने घर पर सोलर लगाना बहुत आसान है।",
       ownerYes: "बढ़िया, फिर तो काम आसान है।",
       ownerNo: "कोई बात नहीं। मालिक की सहमति लेने में हमारी टीम आपकी मदद करेगी।",
@@ -621,6 +623,7 @@ export const FLOW: Record<Lang, FlowCopy> = {
     },
     react: {
       emailVerified: "ବଢ଼ିଆ, ଆପଣଙ୍କ ଇମେଲ ଯାଞ୍ଚ ହୋଇଗଲା!",
+      emailSkipped: "କିଛି ଅସୁବିଧା ନାହିଁ, ଇମେଲ ଛାଡିଦେଉଛୁ।",
       own: "ବହୁତ ଭଲ! ନିଜ ଘରେ ସୋଲାର ଲଗାଇବା ବହୁତ ସହଜ।",
       ownerYes: "ବଢ଼ିଆ, ତେବେ କାମ ସହଜ।",
       ownerNo: "କିଛି ଅସୁବିଧା ନାହିଁ। ମାଲିକଙ୍କ ସମ୍ମତି ପାଇବାରେ ଆମ ଟିମ ସାହାଯ୍ୟ କରିବ।",

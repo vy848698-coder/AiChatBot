@@ -46,7 +46,7 @@ export function leadReport(L: Lead, lang: Lang, audience: Audience = "team"): Le
   const customer = rows([
     L.name && { label: "Name", value: L.name },
     L.mobile && { label: "Mobile", value: displayMobile(L.mobile), verified: !!L.otpVerified },
-    L.email && { label: "Email", value: L.email, verified: !!L.emailVerified },
+    L.email ? { label: "Email", value: L.email, verified: !!L.emailVerified } : team && { label: "Email", value: "Not given (skipped)" },
     team && { label: "Language", value: langName },
   ]);
 
