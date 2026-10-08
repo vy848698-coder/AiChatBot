@@ -1,5 +1,7 @@
-// POST { stage: "plan" | "booked", lead, lang } → the lead to the owner, by
-// WhatsApp (CallMeBot) and email (designed report, email/leadEmail.ts).
+// POST { stage: "plan" | "booked", lead, lang, journey } → the lead to the
+// owner, by WhatsApp (CallMeBot) and email (designed report, email/leadEmail.ts),
+// and saved in the Clans Machina database at the same moment (leadStore.ts;
+// `journey` keeps one chat on one row).
 // Sent when the customer sees their plan, and again when they book.
 // Only with a proof this server signed during the journey (verified email, or
 // the checked mobile when the email was skipped), so nobody can use this to
@@ -9,6 +11,7 @@
 import { sendLeadEmail } from "@/lib/email/leadEmail";
 import { mailMode } from "@/lib/email/mailer";
 import { FLOW } from "@/lib/flowCopy";
+import { saveLeadRow } from "@/lib/leadStore";
 import type { Lang } from "@/lib/i18n";
 import type { Lead } from "@/lib/lead";
 import { whatsAppText } from "@/lib/leadMessage";
@@ -61,7 +64,7 @@ function cleanLead(raw: Record<string, unknown>): Lead {
 }
 
 export async function POST(request: Request) {
-  let body: { stage?: unknown; lead?: unknown; lang?: unknown };
+  let body: { stage?: unknown; lead?: unknown; lang?: unknown; journey?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -71,6 +74,7 @@ export async function POST(request: Request) {
   const stage = body.stage === "booked" ? "booked" : body.stage === "plan" ? "plan" : null;
   const lang: Lang = body.lang === "hi" || body.lang === "or" ? body.lang : "en";
   const lead = cleanLead(raw);
+  const journey = typeof body.journey === "string" && /^[a-z0-9]{12,32}$/.test(body.journey) ? body.journey : null;
 
   if (!stage || !lead.name || !lead.mobile) return Response.json({ ok: false, error: "invalid" }, { status: 400 });
   // Proof the customer really went through Saathi (signed by this server): a
@@ -78,6 +82,7 @@ export async function POST(request: Request) {
   // (customers who skipped the email).
   const mobileChecked = typeof raw.mobileCheck === "string" && checkProof(`chk:tel:${lead.mobile}`, raw.mobileCheck);
   if (!lead.emailVerified && !lead.otpVerified && !mobileChecked) {
+    console.warn(`[lead] refused (${stage}): no signed proof for ${lead.mobile}, so no email, WhatsApp or database row. Is OTP_SECRET set?`);
     return Response.json({ ok: false, error: "unverified" }, { status: 403 });
   }
   if (!lead.emailVerified) lead.email = ""; // an unverified address isn't passed on as theirs
@@ -89,12 +94,14 @@ export async function POST(request: Request) {
     if (!r.ok) return Response.json({ ok: false, error: "limit" }, { status: 429 });
   }
 
-  // Both channels at once; either one may be switched off.
+  // Both channels and the database at once; either channel may be switched off.
   const text = whatsAppText(lead, lang, "team");
-  const [wa, mail] = await Promise.all([
+  const [wa, mail, saved] = await Promise.all([
     alertsOn() ? sendOwnerAlert(text) : null,
     mailMode() !== "off" ? sendLeadEmail(lead, lang) : null,
+    saveLeadRow(lead, lang, stage, journey),
   ]);
+  if (!saved.ok) console.error("[lead] saving to the database failed:", saved.reason);
   if (!wa && process.env.NODE_ENV !== "production") console.log(`[whatsapp] alert not sent (CALLMEBOT_WHATSAPP not set):\n${text}\n`);
   if (mail && !mail.ok) console.error("[lead] email to owner failed:", mail.reason);
 
@@ -102,5 +109,5 @@ export async function POST(request: Request) {
   const email = mail ? mail.ok : null;
   const delivered = whatsapp === true || email === true;
   const anyOn = whatsapp !== null || email !== null;
-  return Response.json({ ok: delivered || !anyOn, whatsapp, email }, { status: delivered || !anyOn ? 200 : 502 });
+  return Response.json({ ok: delivered || !anyOn, whatsapp, email, saved: saved.ok }, { status: delivered || !anyOn ? 200 : 502 });
 }

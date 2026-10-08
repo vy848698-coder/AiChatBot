@@ -24,7 +24,7 @@ export type Lead = {
   roofType?: "own" | "society";
   bill?: number;
   roof?: number | null; // shadow-free sq ft; null = not sure
-  goal?: "savings" | "subsidy" | "backup" | "independence";
+  goal?: "savings" | "subsidy" | "backup";
   cuts?: "lt1" | "h1_3" | "h3_6" | "gt6";
   when?: "now" | "d15" | "d30" | "later";
   pay?: "full" | "bank" | "emi" | "guide";

@@ -54,7 +54,7 @@ const STEP: Partial<Record<NodeId, [number, number]>> = {
 const CHOICE_ICONS: Record<string, string> = {
   own: "🏠", rented: "🔑", yes: "✅", no: "🤔",
   house: "🏡", flat: "🏢", commercial: "🏬", industrial: "🏭", society: "🏘️",
-  savings: "💰", subsidy: "🏛️", backup: "🔋", independence: "⚡",
+  savings: "💰", subsidy: "🏛️", backup: "🔋",
   lt1: "🕐", h1_3: "🕒", h3_6: "🕕", gt6: "🕘",
   now: "🚀", d15: "📅", d30: "🗓️", later: "⏳",
   full: "💳", bank: "🏦", emi: "📆", guide: "🤝",
@@ -390,15 +390,19 @@ export function FlowScreen({
   // and when a consultation is booked. In the background; never blocks the
   // customer. Sent again only if the answers changed since the last one.
   const alerted = useRef<Partial<Record<"plan" | "booked", string>>>({});
+  // This chat's id: the plan and the booking land on one database row.
+  const journey = useRef("");
   const alertOwner = (stage: "plan" | "booked") => {
     const L = leadRef.current;
     const sig = JSON.stringify(L);
     if (alerted.current[stage] === sig) return;
     alerted.current[stage] = sig;
+    // getRandomValues, not randomUUID: phones on the LAN dev server aren't HTTPS.
+    journey.current ||= Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => b.toString(16).padStart(2, "0")).join("");
     void fetch("/api/lead", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ stage, lead: L, lang }),
+      body: JSON.stringify({ stage, lead: L, lang, journey: journey.current }),
       keepalive: true, // still delivered if the customer closes the tab right away
     }).catch(() => {});
   };
@@ -854,7 +858,7 @@ export function FlowScreen({
     ownerOk: { field: "ownerOk", options: opts(f.ownerOk), en: FLOW.en.ownerOk.opts, cols: 1 },
     ptype: { field: "ptype", options: opts(f.ptype), en: FLOW.en.ptype.opts },
     roofType: { field: "roofType", options: opts(f.roofType), en: FLOW.en.roofType.opts, cols: 1 },
-    goal: { field: "goal", options: opts(f.goal), en: FLOW.en.goal.opts },
+    goal: { field: "goal", options: opts(f.goal), en: FLOW.en.goal.opts, cols: 1 },
     cuts: { field: "cuts", options: opts(f.cuts), en: FLOW.en.cuts.opts },
     when: { field: "when", options: opts(f.when), en: FLOW.en.when.opts },
     pay: { field: "pay", options: opts(f.pay), en: FLOW.en.pay.opts },

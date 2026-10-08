@@ -32,7 +32,7 @@ export type FlowCopy = {
   roofType: { ask: string; opts: Opts<"own" | "society"> };
   bill: { ask: string; label: string; above: string; perMonth: string; exactAsk: string; exactPlaceholder: string; exactErr: string };
   roof: { ask: string; label: string; unsure: string; sqft: string };
-  goal: { ask: string; opts: Opts<"savings" | "subsidy" | "backup" | "independence"> };
+  goal: { ask: string; opts: Opts<"savings" | "subsidy" | "backup"> };
   cuts: { ask: string; opts: Opts<"lt1" | "h1_3" | "h3_6" | "gt6"> };
   when: { ask: string; opts: Opts<"now" | "d15" | "d30" | "later"> };
   pay: { ask: string; opts: Opts<"full" | "bank" | "emi" | "guide"> };
@@ -43,7 +43,7 @@ export type FlowCopy = {
     house: string; flat: string; commercial: string; industrial: string;
     roofOwn: string; roofSociety: string;
     billHigh: string; billLow: string; roofKnown: string; roofUnsure: string;
-    savings: string; subsidyOdisha: string; subsidyOther: string; subsidyNone: string; backup: string; independence: string;
+    savings: string; subsidyOdisha: string; subsidyOther: string; subsidyNone: string; backup: string;
     cuts: string; now: string; soon: string; later: string;
     payFull: string; payLoan: string; payGuide: string;
   };
@@ -173,7 +173,7 @@ export const FLOW: Record<Lang, FlowCopy> = {
     },
     goal: {
       ask: "What matters most to you with solar?",
-      opts: { savings: "Save on bills", subsidy: "Get the subsidy", backup: "Power backup", independence: "Make my own power" },
+      opts: { savings: "Save on bills", subsidy: "Get the subsidy", backup: "Power backup" },
     },
     cuts: {
       ask: "How many hours of power cuts do you usually get in a day?",
@@ -208,7 +208,6 @@ export const FLOW: Record<Lang, FlowCopy> = {
       subsidyOther: "Great choice! Under PM Surya Ghar, you can get up to 78 thousand rupees as subsidy.",
       subsidyNone: "Got it. The home subsidy doesn't cover businesses, but solar still saves a lot.",
       backup: "I understand, power cuts are really frustrating.",
-      independence: "Love it! Making your own power is a great feeling.",
       cuts: "Thank you. Our expert will suggest the right backup for you.",
       now: "Excellent! The sooner you start, the sooner you save.",
       soon: "Great timing.",
@@ -391,7 +390,7 @@ export const FLOW: Record<Lang, FlowCopy> = {
     },
     goal: {
       ask: "सोलर से आपके लिए सबसे ज़रूरी क्या है?",
-      opts: { savings: "बिल में बचत", subsidy: "सब्सिडी पाना", backup: "पावर बैकअप", independence: "अपनी बिजली ख़ुद बनाना" },
+      opts: { savings: "बिल में बचत", subsidy: "सब्सिडी पाना", backup: "पावर बैकअप" },
     },
     cuts: {
       ask: "आपके यहाँ रोज़ लगभग कितने घंटे बिजली कटती है?",
@@ -426,7 +425,6 @@ export const FLOW: Record<Lang, FlowCopy> = {
       subsidyOther: "बढ़िया! पीएम सूर्य घर योजना में आपको 78 हज़ार रुपये तक की सब्सिडी मिल सकती है।",
       subsidyNone: "समझ गया। घरेलू सब्सिडी बिज़नेस पर लागू नहीं होती, लेकिन सोलर से फिर भी बहुत बचत होती है।",
       backup: "मैं समझता हूँ, बिजली कटौती सच में बहुत परेशान करती है।",
-      independence: "वाह! अपनी बिजली ख़ुद बनाने का मज़ा ही कुछ और है।",
       cuts: "धन्यवाद। हमारे एक्सपर्ट आपके लिए सही बैकअप सुझाएँगे।",
       now: "शानदार! जितनी जल्दी शुरू करेंगे, उतनी जल्दी बचत शुरू होगी।",
       soon: "बढ़िया टाइमिंग।",
@@ -607,7 +605,7 @@ export const FLOW: Record<Lang, FlowCopy> = {
     },
     goal: {
       ask: "ସୋଲାର ଲଗାଇବାର ଆପଣଙ୍କ ମୁଖ୍ୟ ଉଦ୍ଦେଶ୍ୟ କ'ଣ?",
-      opts: { savings: "ବିଲରେ ସଞ୍ଚୟ", subsidy: "ସବସିଡି ପାଇବା", backup: "ପାୱାର ବ୍ୟାକଅପ", independence: "ବିଦ୍ୟୁତରେ ଆତ୍ମନିର୍ଭରତା" },
+      opts: { savings: "ବିଲରେ ସଞ୍ଚୟ", subsidy: "ସବସିଡି ପାଇବା", backup: "ପାୱାର ବ୍ୟାକଅପ" },
     },
     cuts: {
       ask: "ଆପଣଙ୍କ ଅଞ୍ଚଳରେ ଦିନକୁ ପ୍ରାୟ କେତେ ଘଣ୍ଟା ବିଦ୍ୟୁତ କଟେ?",
@@ -642,7 +640,6 @@ export const FLOW: Record<Lang, FlowCopy> = {
       subsidyOther: "ବଢ଼ିଆ! ପିଏମ ସୂର୍ଯ୍ୟ ଘର ଯୋଜନାରେ ଆପଣ 78 ହଜାର ଟଙ୍କା ପର୍ଯ୍ୟନ୍ତ ସବସିଡି ପାଇପାରିବେ।",
       subsidyNone: "ବୁଝିଗଲି। ଘରୋଇ ସବସିଡି ବ୍ୟବସାୟ ପାଇଁ ନୁହେଁ, କିନ୍ତୁ ସୋଲାରରୁ ତଥାପି ବହୁତ ସଞ୍ଚୟ ହୁଏ।",
       backup: "ମୁଁ ବୁଝିପାରୁଛି, ବିଜୁଳି କଟ ସତରେ ହଇରାଣ କରେ।",
-      independence: "ବାଃ! ନିଜ ବିଜୁଳି ନିଜେ ତିଆରି କରିବାର ମଜା ଅଲଗା।",
       cuts: "ଧନ୍ୟବାଦ। ଆମ ବିଶେଷଜ୍ଞ ଆପଣଙ୍କ ପାଇଁ ଠିକ ବ୍ୟାକଅପ ପରାମର୍ଶ ଦେବେ।",
       now: "ଚମତ୍କାର! ଯେତେ ଶୀଘ୍ର ଆରମ୍ଭ, ସେତେ ଶୀଘ୍ର ସଞ୍ଚୟ।",
       soon: "ବଢ଼ିଆ ସମୟ।",
