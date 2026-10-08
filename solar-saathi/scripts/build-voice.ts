@@ -14,7 +14,7 @@ import { join } from "node:path";
 import { faqSpoken } from "../src/lib/faq";
 import { FLOW } from "../src/lib/flowCopy";
 import { LANGS, STRINGS, WELCOME, type Lang } from "../src/lib/i18n";
-import { clipId, splitSentences, type VoiceManifest } from "../src/lib/tts/clips";
+import { clipId, speakable, splitSentences, type VoiceManifest } from "../src/lib/tts/clips";
 import { specOf, voiceFor } from "../src/lib/tts/config";
 import { synthesize } from "../src/lib/tts/engines";
 
@@ -38,7 +38,8 @@ function sentencesFor(lang: Lang) {
   const out = new Set<string>();
   for (const line of lines) {
     if (!/[.!?।…]/.test(line)) continue;
-    for (const s of splitSentences(line)) if (!s.includes("{") && /\p{L}{2}/u.test(s)) out.add(s);
+    // Recorded as voiced (brand names respelled), so ids match what the app asks for.
+    for (const s of splitSentences(speakable(line, lang))) if (!s.includes("{") && /\p{L}{2}/u.test(s)) out.add(s);
   }
   return [...out];
 }

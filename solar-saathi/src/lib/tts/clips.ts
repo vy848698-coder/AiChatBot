@@ -14,6 +14,20 @@ export function splitSentences(text: string): string[] {
     .filter(Boolean);
 }
 
+// How the voice should say words it gets wrong. Only the audio uses this; the
+// screen keeps the real spelling. The client asked for "Clans Machina" to be
+// said "Clans Masina" (Oct 2026). Change a spelling here, then run
+// `npm run voice:build` so the pre-recorded clips are made again.
+const SAY_AS: Record<string, [RegExp, string][]> = {
+  en: [[/\bClans\s+Machina\b/gi, "Clans Masina"]],
+  hi: [[/\bClans\s+Machina\b/gi, "क्लैंस मसीना"]],
+  or: [[/\bClans\s+Machina\b/gi, "କ୍ଲାନ୍ସ ମସିନା"]],
+};
+
+export function speakable(text: string, lang: string): string {
+  return (SAY_AS[lang] ?? []).reduce((t, [from, to]) => t.replace(from, to), text);
+}
+
 // Stable short id for a sentence (53-bit cyrb53 hash, hex).
 export function clipId(sentence: string): string {
   let h1 = 0xdeadbeef;

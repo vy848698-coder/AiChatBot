@@ -18,7 +18,7 @@
 
 import { audioCtx } from "./audio";
 import { bcpOf, type Lang } from "./i18n";
-import { clipId, splitSentences, type VoiceManifest } from "./tts/clips";
+import { clipId, speakable, splitSentences, type VoiceManifest } from "./tts/clips";
 
 type Listener = () => void;
 
@@ -132,7 +132,7 @@ class Voice {
     if (this.muted) return;
     await this.probe();
     if (!this.cloud?.[lang]) return;
-    const loads = splitSentences(text).map((s) => (audioCtx() ? this.clip(s, lang) : this.fetchBytes(s, lang)));
+    const loads = splitSentences(speakable(text, lang)).map((s) => (audioCtx() ? this.clip(s, lang) : this.fetchBytes(s, lang)));
     loads.forEach((p) => p.catch(() => {}));
     await loads[0]?.catch(() => {}); // speak() falls back to the browser voice
   }
@@ -144,7 +144,8 @@ class Voice {
   async speak(text: string, lang: Lang, onProgress?: (chars: number) => void, spoken?: string): Promise<void> {
     this.stop();
     const token = ++this.token;
-    const say = spoken ?? text;
+    // The words actually voiced: brand names respelled so they sound right.
+    const say = speakable(spoken ?? text, lang);
 
     if (!this.muted) {
       await this.probe();
