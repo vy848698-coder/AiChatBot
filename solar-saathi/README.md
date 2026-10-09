@@ -84,8 +84,10 @@ Code: `src/lib/phone/`, `src/lib/otp.ts` (shared with email) and `src/app/api/ot
 | `MC_PASSWORD` | your Message Central login password |
 | `OTP_SECRET` | 32+ random characters, **required**: without it no SMS or email code is sent |
 | `SMTP_USER` / `SMTP_PASS` | the Gmail + app password, for the email code step |
+| `LEAD_EMAIL_TO` | who gets the lead emails (comma-separated); empty = the default in `src/lib/email/leadEmail.ts` |
+| `MYSQLHOST` / `MYSQLPORT` / `MYSQLUSER` / `MYSQLPASSWORD` / `MYSQLDATABASE` | the Clans Machina database, where every lead is saved (`saathi_leads`). On Railway use the **public** TCP proxy host and port (MySQL service → Settings → Networking), not `mysql.railway.internal`: Vercel is outside Railway's private network |
 
-Then open `https://<your-app>.vercel.app/api/otp/status`. It must say `"ready": true`; otherwise `missing` lists what's not set (values are never shown).
+Then open `https://<your-app>.vercel.app/api/otp/status`. It must say `"ready": true` and `"database": "ok"`; otherwise `missing` lists what's not set (values are never shown). Opening it also creates the `saathi_leads` table if it isn't there yet.
 
 Automated tests send the header `x-saathi-test: 1`, which (in development only) shows codes on screen instead of sending real SMS/email.
 

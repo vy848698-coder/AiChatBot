@@ -68,6 +68,32 @@ const FIXED = ["journey_id", "created_at", "status"];
 
 let tableReady: Promise<unknown> | null = null;
 
+// "Connection refused" has an empty message and only a code (ECONNREFUSED).
+const reason = (err: unknown) =>
+  err instanceof Error ? [(err as { code?: string }).code, err.message].filter(Boolean).join(": ") : String(err);
+
+function ensureTable() {
+  tableReady ??= db()
+    .query(CREATE_TABLE)
+    .catch((err) => {
+      tableReady = null; // try again on the next lead
+      throw err;
+    });
+  return tableReady;
+}
+
+// For /api/otp/status: can this deployment reach the database and the table?
+export async function dbReady(): Promise<boolean> {
+  try {
+    await ensureTable();
+    await db().query("SELECT 1 FROM saathi_leads LIMIT 1"); // live check, not just the cached table step
+    return true;
+  } catch (err) {
+    console.error("[db] not reachable:", reason(err));
+    return false;
+  }
+}
+
 function row(L: Lead, lang: Lang, stage: "plan" | "booked", journey: string | null) {
   const { score, temperature } = scoreLead(L);
   const e = L.bill && L.ptype && L.pay ? computeEstimate(L.bill, L.roof ?? null, categoryOf(L), L.state === HOME_STATE) : null;
@@ -120,11 +146,7 @@ export async function saveLeadRow(
 ): Promise<{ ok: true; id: number } | { ok: false; reason: string }> {
   try {
     const pool = db();
-    tableReady ??= pool.query(CREATE_TABLE).catch((err) => {
-      tableReady = null; // try again on the next lead
-      throw err;
-    });
-    await tableReady;
+    await ensureTable();
 
     const r = row(L, lang, stage, journey);
     const cols = Object.keys(r);
@@ -143,6 +165,6 @@ ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id), ${updates.join(", ")}`;
     const [res] = await pool.execute(sql, Object.values(r));
     return { ok: true, id: (res as { insertId: number }).insertId };
   } catch (err) {
-    return { ok: false, reason: err instanceof Error ? err.message : String(err) };
+    return { ok: false, reason: reason(err) };
   }
 }
