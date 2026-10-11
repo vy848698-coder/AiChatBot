@@ -44,7 +44,9 @@ async function transport(): Promise<Cached> {
         port,
         secure: port === 465, // 587 upgrades with STARTTLS
         auth: { user, pass: process.env.SMTP_PASS!.replace(/\s+/g, "") }, // Google shows app passwords with spaces
-        pool: true,
+        // A pooled connection dies while a Vercel function sleeps between
+        // requests, and the next send then fails or hangs: connect per email there.
+        pool: !process.env.VERCEL,
         maxConnections: 2,
         ...timeouts,
       }),

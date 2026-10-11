@@ -4,7 +4,8 @@
 //        which languages have a cloud voice, and which voice that is.
 // POST { text, lang } → audio/mpeg
 
-import { LANGS, type Lang } from "@/lib/i18n";
+import { LANGS, LIVE_LANGS, type Lang } from "@/lib/i18n";
+import { clientIp, rateLimit } from "@/lib/rateLimit";
 import { specOf, voiceFor } from "@/lib/tts/config";
 import { synthesize } from "@/lib/tts/engines";
 
@@ -30,9 +31,10 @@ export async function POST(request: Request) {
     return Response.json({ error: "Invalid JSON" }, { status: 400 });
   }
   const text = typeof body.text === "string" ? body.text.trim() : "";
-  const lang = LANGS.find((l) => l.code === body.lang)?.code as Lang | undefined;
+  // Only languages the app offers: a hidden one (Odia) may run on a paid key.
+  const lang = LIVE_LANGS.find((l) => l === body.lang) as Lang | undefined;
   if (!text || text.length > MAX_CHARS || !lang) {
-    return Response.json({ error: "text (≤600 chars) and lang (en|hi|or) are required" }, { status: 400 });
+    return Response.json({ error: `text (≤600 chars) and lang (${LIVE_LANGS.join("|")}) are required` }, { status: 400 });
   }
 
   const choice = voiceFor(lang);
@@ -41,6 +43,11 @@ export async function POST(request: Request) {
   const cacheKey = `${choice.engine}|${choice.voice}|${choice.rate}|${text}`;
   const hit = cache.get(cacheKey);
   if (hit) return audio(hit);
+
+  // New audio only (cached lines are free): a whole chat makes far fewer than
+  // this, so it only stops someone using Saathi's voice as a free TTS service.
+  const r = rateLimit(`tts|${clientIp(request)}`, 150, 3600_000);
+  if (!r.ok) return Response.json({ error: "Too many requests", retryAfter: r.retryAfter }, { status: 429 });
 
   let joined: Buffer;
   try {
