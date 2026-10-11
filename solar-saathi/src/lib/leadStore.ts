@@ -5,6 +5,11 @@
 // the sales team sees in the email, and the plan figures are recalculated
 // from the answers exactly as the email does.
 // The table is created on first use; the same SQL is in scripts/saathi-leads.sql.
+//
+// Hosting that can't reach the MySQL server directly (Vercel → shared cPanel
+// hosting without Remote MySQL): set SAATHI_LEAD_API to the website's
+// save_saathi_lead.php and SAATHI_LEAD_KEY to its shared secret. The same row
+// is then posted there and the PHP saves it, instead of connecting from here.
 
 import { db } from "./db";
 import { computeEstimate } from "./estimate";
@@ -83,7 +88,9 @@ function ensureTable() {
 }
 
 // For /api/otp/status: can this deployment reach the database and the table?
+// Leads going through the website's PHP endpoint: MySQL isn't used from here.
 export async function dbReady(): Promise<boolean> {
+  if (process.env.SAATHI_LEAD_API) return !!process.env.SAATHI_LEAD_KEY;
   try {
     await ensureTable();
     await db().query("SELECT 1 FROM saathi_leads LIMIT 1"); // live check, not just the cached table step
@@ -92,6 +99,21 @@ export async function dbReady(): Promise<boolean> {
     console.error("[db] not reachable:", reason(err));
     return false;
   }
+}
+
+type Saved = { ok: true; id: number } | { ok: false; reason: string };
+
+// The row to the website's PHP endpoint, which runs the same insert-or-update.
+async function postLeadRow(url: string, r: ReturnType<typeof row>): Promise<Saved> {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Saathi-Key": process.env.SAATHI_LEAD_KEY ?? "" },
+    body: JSON.stringify({ row: r }),
+    signal: AbortSignal.timeout(10_000),
+  });
+  const body = (await res.json().catch(() => null)) as { ok?: boolean; id?: number; error?: string } | null;
+  if (res.ok && body?.ok) return { ok: true, id: body.id ?? 0 };
+  return { ok: false, reason: `${url} answered ${res.status}${body?.error ? `: ${body.error}` : ""}` };
 }
 
 function row(L: Lead, lang: Lang, stage: "plan" | "booked", journey: string | null) {
@@ -143,8 +165,11 @@ export async function saveLeadRow(
   lang: Lang,
   stage: "plan" | "booked",
   journey: string | null,
-): Promise<{ ok: true; id: number } | { ok: false; reason: string }> {
+): Promise<Saved> {
   try {
+    const api = process.env.SAATHI_LEAD_API;
+    if (api) return await postLeadRow(api, row(L, lang, stage, journey));
+
     const pool = db();
     await ensureTable();
 
