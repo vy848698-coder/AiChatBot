@@ -23,8 +23,9 @@ export function engineReady(engine: Engine) {
 }
 
 export function synthesize(req: SynthRequest): Promise<Buffer> {
-  // Edge drops a connection now and then, so one retry before giving up.
-  if (req.engine === "edge") return edgeSlot(() => edge(req).catch(() => edge(req)));
+  // Edge drops a connection or answers 429 ("too many") now and then, so two
+  // retries after a short pause before giving up.
+  if (req.engine === "edge") return edgeSlot(() => retry(() => edge(req), [400, 1200]));
   if (req.engine === "azure") return azure(req);
   return sarvam(req);
 }
@@ -47,8 +48,22 @@ async function edgeSlot<T>(fn: () => Promise<T>) {
   }
 }
 
+async function retry<T>(fn: () => Promise<T>, pausesMs: number[]): Promise<T> {
+  for (const ms of pausesMs) {
+    try {
+      return await fn();
+    } catch (err) {
+      console.warn("[tts] edge failed, retrying:", (err as Error).message);
+      await new Promise((r) => setTimeout(r, ms));
+    }
+  }
+  return fn();
+}
+
 // Microsoft Edge's read-aloud service: the same neural voices as Azure, free
-// and without a key. Unofficial, so it can change without notice.
+// and without a key. Unofficial, so it can change without notice: in Oct 2026
+// Microsoft moved it and msedge-tts 2.0.x got 403 for every sentence (fixed
+// in 2.1.0). If live lines go silent again, update msedge-tts first.
 async function edge({ voice, text, rate = 0 }: SynthRequest) {
   const tts = new MsEdgeTTS();
   try {

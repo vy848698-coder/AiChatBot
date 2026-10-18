@@ -155,7 +155,7 @@ class Voice {
         const clips = sentences.map((s) => this.clip(s, lang).catch(() => null));
         const first = await clips[0];
         if (token !== this.token) return;
-        if (first) return this.playClips(sentences, clips, text, say, token, onProgress, estimateMs(text, lang) / 1000);
+        if (first) return this.playClips(sentences, clips, lang, text, say, token, onProgress, estimateMs(text, lang) / 1000);
       }
     }
     return this.speakBrowser(text, say, lang, token, onProgress);
@@ -238,6 +238,7 @@ class Voice {
   private playClips(
     sentences: string[],
     clips: Promise<AudioBuffer | null>[],
+    lang: Lang,
     text: string,
     say: string,
     token: number,
@@ -269,7 +270,23 @@ class Voice {
         if (token !== this.token) return;
         const c0 = chars;
         chars += sentences[i].length;
-        if (!buf) continue;
+        if (!buf) {
+          // Its audio didn't load (voice service down): the phone's own voice
+          // says it after the clips before it, so no sentence goes missing,
+          // e.g. "It's lovely to meet you, Vv." after a recorded "Thank you!".
+          const wait = cursor - ctx.currentTime;
+          if (wait > 0) await new Promise((r) => setTimeout(r, wait * 1000));
+          if (token !== this.token) return;
+          const slot = { start: ctx.currentTime, end: ctx.currentTime + estimateMs(sentences[i], lang) / 1000, c0, c1: chars };
+          timeline.push(slot);
+          this.analyser = null; // no waveform: the mouth follows the simulated envelope
+          await this.speakSentence(sentences[i], lang, token);
+          if (token !== this.token) return;
+          this.analyser = analyser;
+          slot.end = ctx.currentTime;
+          cursor = slot.end + gapAfter(sentences[i]);
+          continue;
+        }
         const start = Math.max(cursor, ctx.currentTime + 0.03);
         const src = ctx.createBufferSource();
         src.buffer = buf;
@@ -322,6 +339,33 @@ class Voice {
         requestAnimationFrame(tick);
       };
       requestAnimationFrame(tick);
+    });
+  }
+
+  // One sentence with the browser's voice (silent when there is none); ends
+  // when it has been said, or on stop().
+  private speakSentence(sentence: string, lang: Lang, token: number) {
+    const synth = typeof window !== "undefined" ? window.speechSynthesis : undefined;
+    const v = synth ? this.pickVoice(lang) : null;
+    const est = estimateMs(sentence, lang);
+    return new Promise<void>((resolve) => {
+      let done = false;
+      const end = () => {
+        if (done) return;
+        done = true;
+        resolve();
+      };
+      if (!v || !synth) return void setTimeout(end, est);
+      const u = new SpeechSynthesisUtterance(sentence);
+      u.voice = v;
+      u.lang = v.lang;
+      u.rate = lang === "en" ? 1.0 : 0.95;
+      u.pitch = 1.05;
+      u.onboundary = () => (this.burst = 1);
+      u.onend = end;
+      u.onerror = end;
+      if (token === this.token) synth.speak(u);
+      setTimeout(end, est * 2.5 + 3000); // safety net if onend never fires
     });
   }
 
