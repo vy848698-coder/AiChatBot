@@ -8,6 +8,7 @@
 // spam the owner's WhatsApp or inbox. Every field is checked
 // against the allowed answers, and the plan is recalculated from the answers.
 
+import { postToCrm } from "@/lib/crm";
 import { sendLeadEmail } from "@/lib/email/leadEmail";
 import { mailMode } from "@/lib/email/mailer";
 import { FLOW } from "@/lib/flowCopy";
@@ -94,12 +95,14 @@ export async function POST(request: Request) {
     if (!r.ok) return Response.json({ ok: false, error: "limit" }, { status: 429 });
   }
 
-  // Both channels and the database at once; either channel may be switched off.
+  // Both channels, the database and the CRM at once; either channel may be
+  // switched off. The CRM copy is best-effort and never changes the answer.
   const text = whatsAppText(lead, lang, "team");
   const [wa, mail, saved] = await Promise.all([
     alertsOn() ? sendOwnerAlert(text) : null,
     mailMode() !== "off" ? sendLeadEmail(lead, lang) : null,
     saveLeadRow(lead, lang, stage, journey),
+    postToCrm(lead, { lang, stage, journey }).catch(() => {}),
   ]);
   if (!saved.ok) console.error("[lead] saving to the database failed:", saved.reason);
   if (!wa && process.env.NODE_ENV !== "production") console.log(`[whatsapp] alert not sent (CALLMEBOT_WHATSAPP not set):\n${text}\n`);
