@@ -2,7 +2,7 @@
 
 AI voice chatbot for rooftop solar in Odia, Hindi and English. The research and the full build plan are in [`../docs/01-research-and-build-plan.md`](../docs/01-research-and-build-plan.md).
 
-> **Languages live: Hindi and English.** Odia is fully written (all copy, FAQ, voice set-up) but hidden from the language picker until the client asks for it. To bring it back, add `"or"` to `LIVE_LANGS` in `src/lib/i18n.ts`, then get the Odia text checked and pick an Odia voice.
+> **Languages live: Odia, Hindi and English.** Odia is spoken by Azure Speech (free F0 tier, `or-IN-SukantNeural`); set `AZURE_SPEECH_KEY` and `AZURE_SPEECH_REGION`, otherwise Odia falls back to the browser voice or text only. The Odia copy is still a first draft awaiting a native-speaker review. To hide Odia again, remove `"or"` from `LIVE_LANGS` in `src/lib/i18n.ts`.
 
 ## Run
 
