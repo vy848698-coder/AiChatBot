@@ -11,7 +11,7 @@ import { PHONE } from "../contact";
 import { rupees } from "../estimate";
 import type { Lang } from "../i18n";
 import type { Lead } from "../lead";
-import { leadReport, tempIcon, whatsAppText, type Row } from "../leadMessage";
+import { leadReport, whatsAppText, type Row } from "../leadMessage";
 import { sendMail, type SendResult } from "./mailer";
 
 const DEFAULT_TO = "info@clansmachina.com";
@@ -39,9 +39,14 @@ export function leadEmail(L: Lead, lang: Lang) {
   const when = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata", weekday: "short", day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" });
   const title = booked ? "Consultation booked" : "New solar lead";
   const subject = booked
-    ? `✅ Consultation booked: ${r.name} · ${r.booking[0]?.value}, ${r.booking[1]?.value.replace(/, \d{4}$/, "")}`
-    : `${tempIcon(r.temperature)} New solar lead: ${r.name}${r.plan ? ` · ${r.plan.kw} kW` : ""}${L.district ? ` · ${L.district}` : ""} (${r.temperature})`;
+    ? `Consultation booked: ${r.name} · ${r.booking[0]?.value}, ${r.booking[1]?.value.replace(/, \d{4}$/, "")}`
+    : `New solar lead: ${r.name}${r.plan ? ` · ${r.plan.kw} kW` : ""}${L.district ? ` · ${L.district}` : ""} (${r.temperature})`;
   const preheader = `${r.temperature} lead (score ${r.score}) · ${r.name}${r.plan ? ` · ${r.plan.kw} kW plan` : ""}${place ? ` · ${place}` : ""}`;
+
+  // Small round marker drawn in CSS, used instead of emoji: emoji look
+  // different (and out of place) in every mail app, a dot stays on-brand.
+  const dot = (color: string) =>
+    `<span style="display:inline-block;width:8px;height:8px;border-radius:4px;background:${color};vertical-align:middle;margin:-2px 8px 0 0;"></span>`;
 
   // One label/value line of a section.
   const row = (x: Row, last: boolean) => `
@@ -109,16 +114,16 @@ export function leadEmail(L: Lead, lang: Lang) {
 <!-- header -->
 <tr><td bgcolor="#0b0f12" style="background-color:#0b0f12;background-image:linear-gradient(135deg,#0b0f12 0%,#10261e 55%,#1d4a35 100%);border-radius:22px 22px 0 0;padding:24px 28px 26px;">
 <div style="font-size:15px;font-weight:800;color:#ffffff;">Solar Saathi <span style="font-size:13px;font-weight:600;color:#3ecf8e;">by Clans Machina</span></div>
-<div style="margin-top:18px;font-size:13px;font-weight:700;letter-spacing:1px;color:#3ecf8e;text-transform:uppercase;">${booked ? "✅" : "☀️"} ${esc(title)}</div>
+<div style="margin-top:18px;font-size:13px;font-weight:700;letter-spacing:1px;color:#3ecf8e;text-transform:uppercase;">${dot("#3ecf8e")}${esc(title)}</div>
 <div style="margin-top:6px;font-size:28px;line-height:1.2;font-weight:800;color:#ffffff;">${esc(r.name)}</div>
-${place ? `<div style="margin-top:6px;font-size:16px;color:#b8f5d9;">📍 ${esc([L.area, place].filter(Boolean).join(", "))}</div>` : ""}
+${place ? `<div style="margin-top:6px;font-size:16px;color:#b8f5d9;">${esc([L.area, place].filter(Boolean).join(", "))}</div>` : ""}
 ${
   booked // the first thing the owner needs on a booking: what, when
-    ? `<div style="margin-top:14px;background:#163d2c;border:1px solid #2f6b4f;border-radius:12px;padding:10px 14px;font-size:15px;font-weight:700;line-height:1.45;color:#ffffff;">📅 ${esc(r.booking.slice(0, 3).map((x) => x.value).join(" · "))}</div>`
+    ? `<div style="margin-top:14px;background:#163d2c;border:1px solid #2f6b4f;border-radius:12px;padding:10px 14px;font-size:15px;font-weight:700;line-height:1.45;color:#ffffff;"><div style="font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#3ecf8e;">Booked for</div>${esc(r.booking.slice(0, 3).map((x) => x.value).join(" · "))}</div>`
     : ""
 }
 <div style="margin-top:16px;">
-<span style="display:inline-block;background:${t.bg};color:${t.fg};border:1px solid ${t.border};border-radius:999px;padding:6px 14px;font-size:14px;font-weight:800;">${tempIcon(r.temperature)} ${r.temperature} lead · score ${r.score}</span>
+<span style="display:inline-block;background:${t.bg};color:${t.fg};border:1px solid ${t.border};border-radius:999px;padding:6px 14px;font-size:14px;font-weight:800;">${dot(t.fg)}${r.temperature} lead · score ${r.score}</span>
 <span style="display:inline-block;margin-left:6px;color:#9fb5ab;font-size:13px;">${esc(when)}</span>
 </div>
 </td></tr>
@@ -126,9 +131,9 @@ ${
 <!-- quick actions -->
 <tr><td bgcolor="#ffffff" style="background:#ffffff;padding:20px 24px 6px;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
-${button(`tel:+91${r.mobile}`, "📞 Call", "#22b574", "#05140c")}
-${button(`https://wa.me/91${r.mobile}`, "💬 WhatsApp", "#25d366", "#062b14")}
-${r.email ? button(`mailto:${r.email}`, "✉️ Email", "#eef3f1", "#10201a") : ""}
+${button(`tel:+91${r.mobile}`, "Call", "#22b574", "#05140c")}
+${button(`https://wa.me/91${r.mobile}`, "WhatsApp", "#25d366", "#062b14")}
+${r.email ? button(`mailto:${r.email}`, "Email", "#eef3f1", "#10201a") : ""}
 </tr></table>
 </td></tr>
 
