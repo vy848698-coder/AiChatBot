@@ -21,8 +21,24 @@ export function splitSentences(text: string): string[] {
 const SAY_AS: Record<string, [RegExp, string][]> = {
   en: [[/\bClans\s+Machina\b/gi, "Clans Masina"]],
   hi: [[/\bClans\s+Machina\b/gi, "क्लैंस मसीना"]],
-  or: [[/\bClans\s+Machina\b/gi, "କ୍ଲାନ୍ସ ମସିନା"]],
+  or: [[/\bClans\s+Machina\b/gi, "କ୍ଲାନ୍ସ ମସିନା"], ...odiaHalant()],
 };
+
+// Odia reads a final consonant with its built-in "o" ("ବିଲ" → "bilo",
+// "ପ୍ଲାନ" → "plano"); a halant (୍) ends the word cleanly ("bil", "plan").
+// Whole words only, so ବିଲମ୍ବ, ଯାଞ୍ଚିତ or ଇମେଲରେ are left alone. The client
+// asked for these (Nov 2026) after listening to before/after samples.
+function odiaHalant(): [RegExp, string][] {
+  const words = [
+    "ବହୁତ", "ଧନ୍ୟବାଦ", "ଇମେଲ", "ଯାଞ୍ଚ", "ଠିକ", "ପିନ", "କୋଡ", "ସେଭ",
+    "ବିଦ୍ୟୁତ", "ବିଲ", "ସାଇଟ", "ପ୍ଲାନ", "ବୁକ", "ଟିମ",
+  ];
+  const whole = (w: string) => new RegExp(`(?<![\\u0B00-\\u0B7F\\u200C\\u200D])${w}(?![\\u0B00-\\u0B7F\\u200C\\u200D])`, "gu");
+  return [
+    ...words.map((w): [RegExp, string] => [whole(w), `${w}୍`]),
+    [whole("ସବସିଡି"), "ସବ୍‌ସିଡି"],
+  ];
+}
 
 export function speakable(text: string, lang: string): string {
   return (SAY_AS[lang] ?? []).reduce((t, [from, to]) => t.replace(from, to), text);
