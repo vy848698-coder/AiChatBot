@@ -268,8 +268,8 @@ export const FAQ: Record<Lang, FaqCopy> = {
       },
       rented: {
         q: "Can I install solar on a flat or rented house?",
-        a: "Yes. A rented house needs the owner's written permission. In a flat, panels can go on your own terrace, or the society can put solar on the common roof to cut the common bill. Housing societies get a subsidy too.",
-        k: "Owner's consent · Society roof",
+        a: "We install solar only on a house the customer owns, so not on a rented house; if the owner would like solar, our team will help them. In a flat you own, panels can go on your own terrace, or the society can put solar on the common roof to cut the common bill. Housing societies get a subsidy too.",
+        k: "Own house only · Society roof",
       },
       netmeter: {
         q: "What is net metering?",
@@ -496,8 +496,8 @@ export const FAQ: Record<Lang, FaqCopy> = {
       },
       rented: {
         q: "क्या फ़्लैट या किराए के घर में सोलर लग सकता है?",
-        a: "हाँ। किराए के घर के लिए मकान मालिक की लिखित अनुमति चाहिए। फ़्लैट में पैनल आपकी अपनी छत पर लग सकते हैं, या सोसाइटी कॉमन छत पर सोलर लगाकर कॉमन बिल घटा सकती है। हाउसिंग सोसाइटी को भी सब्सिडी मिलती है।",
-        k: "मालिक की अनुमति · सोसाइटी की छत",
+        a: "हम सोलर सिर्फ़ ग्राहक के अपने घर पर लगाते हैं, किराए के घर पर नहीं; अगर मकान मालिक सोलर लगवाना चाहें, तो हमारी टीम उनकी मदद करेगी। अपने फ़्लैट में पैनल आपकी अपनी छत पर लग सकते हैं, या सोसाइटी कॉमन छत पर सोलर लगाकर कॉमन बिल घटा सकती है। हाउसिंग सोसाइटी को भी सब्सिडी मिलती है।",
+        k: "सिर्फ़ अपना घर · सोसाइटी की छत",
       },
       netmeter: {
         q: "नेट मीटरिंग क्या है?",
@@ -724,8 +724,8 @@ export const FAQ: Record<Lang, FaqCopy> = {
       },
       rented: {
         q: "ଫ୍ଲାଟ କିମ୍ବା ଭଡ଼ା ଘରେ ସୋଲାର ଲାଗିପାରିବ କି?",
-        a: "ହଁ। ଭଡ଼ା ଘର ପାଇଁ ଘର ମାଲିକଙ୍କ ଲିଖିତ ଅନୁମତି ଦରକାର। ଫ୍ଲାଟରେ ପ୍ୟାନେଲ ଆପଣଙ୍କ ନିଜ ଛାତରେ ଲାଗିପାରିବ, କିମ୍ବା ସୋସାଇଟି ସାଧାରଣ ଛାତରେ ସୋଲାର ଲଗାଇ ସାଧାରଣ ବିଲ କମାଇପାରିବ। ହାଉସିଂ ସୋସାଇଟି ମଧ୍ୟ ସବସିଡି ପାଆନ୍ତି।",
-        k: "ମାଲିକଙ୍କ ଅନୁମତି · ସୋସାଇଟି ଛାତ",
+        a: "ଆମେ କେବଳ ଗ୍ରାହକଙ୍କ ନିଜ ଘରେ ସୋଲାର ଲଗାଉ, ଭଡ଼ା ଘରେ ନୁହେଁ; ଯଦି ଘର ମାଲିକ ସୋଲାର ଲଗାଇବାକୁ ଚାହାନ୍ତି, ଆମ ଟିମ ତାଙ୍କୁ ସାହାଯ୍ୟ କରିବ। ନିଜ ଫ୍ଲାଟରେ ପ୍ୟାନେଲ ଆପଣଙ୍କ ନିଜ ଛାତରେ ଲାଗିପାରିବ, କିମ୍ବା ସୋସାଇଟି ସାଧାରଣ ଛାତରେ ସୋଲାର ଲଗାଇ ସାଧାରଣ ବିଲ କମାଇପାରିବ। ହାଉସିଂ ସୋସାଇଟି ମଧ୍ୟ ସବସିଡି ପାଆନ୍ତି।",
+        k: "କେବଳ ନିଜ ଘର · ସୋସାଇଟି ଛାତ",
       },
       netmeter: {
         q: "ନେଟ ମିଟରିଂ କଣ?",

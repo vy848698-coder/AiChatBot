@@ -27,7 +27,8 @@ export type FlowCopy = {
   region: { state: string; district: string; chooseState: string; chooseDistrict: string; err: string; confirm: string };
   area: { ask: string; askPlain: string; label: string; placeholder: string; err: string };
   own: { ask: string; opts: Opts<"own" | "rented"> };
-  ownerOk: { ask: string; opts: Opts<"yes" | "no"> };
+  ownerOk: { ask: string; opts: Opts<"yes" | "no"> }; // no longer asked: rented ends the plan (Nov 2026)
+  rented: { say: string; change: string; expert: string };
   ptype: { ask: string; opts: Opts<"house" | "flat" | "commercial" | "industrial"> };
   roofType: { ask: string; opts: Opts<"own" | "society"> };
   bill: { ask: string; label: string; above: string; perMonth: string; exactAsk: string; exactPlaceholder: string; exactErr: string };
@@ -147,6 +148,11 @@ export const FLOW: Record<Lang, FlowCopy> = {
     ownerOk: {
       ask: "For solar on a rented house, the owner's permission is needed. Do you have the owner's permission?",
       opts: { yes: "Yes, I have permission", no: "No / Not sure" },
+    },
+    rented: {
+      say: "Sorry, {first}. We install solar only on a house the customer owns, so we can't install it on a rented house. If this is your own house, please change your answer. If the owner would like solar, our team will be happy to help.",
+      change: "It's my own house – change answer",
+      expert: "Talk to our team",
     },
     ptype: {
       ask: "What type of property is it?",
@@ -365,6 +371,11 @@ export const FLOW: Record<Lang, FlowCopy> = {
       ask: "किराए के घर पर सोलर लगाने के लिए मकान मालिक की अनुमति ज़रूरी है। क्या आपके पास मालिक की अनुमति है?",
       opts: { yes: "हाँ, अनुमति है", no: "नहीं / पक्का नहीं" },
     },
+    rented: {
+      say: "माफ़ कीजिए, {first}। हम सोलर सिर्फ़ ग्राहक के अपने घर पर ही लगाते हैं, इसलिए किराए के घर पर हम सोलर नहीं लगा सकते। अगर यह आपका अपना घर है, तो कृपया अपना जवाब बदलें। अगर मकान मालिक सोलर लगवाना चाहें, तो हमारी टीम ख़ुशी से मदद करेगी।",
+      change: "यह मेरा अपना घर है – जवाब बदलें",
+      expert: "हमारी टीम से बात करें",
+    },
     ptype: {
       ask: "यह किस तरह की प्रॉपर्टी है?",
       opts: { house: "इंडिपेंडेंट मकान", flat: "फ़्लैट / अपार्टमेंट", commercial: "कमर्शियल", industrial: "इंडस्ट्रियल" },
@@ -579,6 +590,11 @@ export const FLOW: Record<Lang, FlowCopy> = {
     ownerOk: {
       ask: "ଭଡ଼ା ଘରେ ରୁଫଟପ ସୋଲାର ପାଇଁ ଘର ମାଲିକଙ୍କ ଅନୁମତି ଦରକାର। ଆପଣଙ୍କ ପାଖରେ ମାଲିକଙ୍କ ଅନୁମତି ଅଛି କି?",
       opts: { yes: "ହଁ, ଅନୁମତି ଅଛି", no: "ନାହିଁ / ନିଶ୍ଚିତ ନୁହେଁ" },
+    },
+    rented: {
+      say: "ଦୁଃଖିତ, {first}। ଆମେ କେବଳ ଗ୍ରାହକଙ୍କ ନିଜ ଘରେ ହିଁ ସୋଲାର ଲଗାଉ, ତେଣୁ ଭଡ଼ା ଘରେ ଆମେ ସୋଲାର ଲଗାଇପାରିବୁ ନାହିଁ। ଯଦି ଏହା ଆପଣଙ୍କ ନିଜ ଘର, ଦୟାକରି ଆପଣଙ୍କ ଉତ୍ତର ବଦଳାନ୍ତୁ। ଯଦି ଘର ମାଲିକ ସୋଲାର ଲଗାଇବାକୁ ଚାହାନ୍ତି, ଆମ ଟିମ ଖୁସିରେ ସାହାଯ୍ୟ କରିବ।",
+      change: "ଏହା ମୋର ନିଜ ଘର – ଉତ୍ତର ବଦଳାନ୍ତୁ",
+      expert: "ଆମ ଟିମ ସହ କଥା ହୁଅନ୍ତୁ",
     },
     ptype: {
       ask: "ଏହା କେଉଁ ପ୍ରକାରର ସମ୍ପତ୍ତି?",

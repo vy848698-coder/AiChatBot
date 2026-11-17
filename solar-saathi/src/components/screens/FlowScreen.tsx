@@ -28,7 +28,7 @@ export type Speak = (text: string, opts?: { spoken?: string; onProgress?: (n: nu
 type NodeId =
   | "name" | "mobile" | "otp" | "email" | "emailOtp" | "review"
   | "pin" | "region" | "area"
-  | "own" | "ownerOk" | "ptype" | "roofType" | "bill" | "billExact" | "roof" | "goal" | "cuts" | "when" | "pay"
+  | "own" | "rented" | "ptype" | "roofType" | "bill" | "billExact" | "roof" | "goal" | "cuts" | "when" | "pay"
   | "calc" | "results"
   | "mode" | "date" | "slot" | "booked"
   | "faq";
@@ -36,7 +36,7 @@ type NodeId =
 const SECTION: Record<NodeId, number> = {
   name: 0, mobile: 0, otp: 0, email: 0, emailOtp: 0, review: 0,
   pin: 1, region: 1, area: 1,
-  own: 2, ownerOk: 2, ptype: 2, roofType: 2, bill: 2, billExact: 2, roof: 2, goal: 2, cuts: 2, when: 2, pay: 2,
+  own: 2, rented: 2, ptype: 2, roofType: 2, bill: 2, billExact: 2, roof: 2, goal: 2, cuts: 2, when: 2, pay: 2,
   calc: 3, results: 3,
   mode: 4, date: 4, slot: 4, booked: 4,
   faq: 4,
@@ -46,7 +46,7 @@ const SECTION: Record<NodeId, number> = {
 const STEP: Partial<Record<NodeId, [number, number]>> = {
   name: [1, 3], mobile: [2, 3], otp: [2, 3], email: [3, 3], emailOtp: [3, 3],
   pin: [1, 3], region: [2, 3], area: [3, 3],
-  own: [1, 6], ownerOk: [1, 6], ptype: [2, 6], roofType: [2, 6], bill: [3, 6], billExact: [3, 6], roof: [3, 6],
+  own: [1, 6], rented: [1, 6], ptype: [2, 6], roofType: [2, 6], bill: [3, 6], billExact: [3, 6], roof: [3, 6],
   goal: [4, 6], cuts: [4, 6], when: [5, 6], pay: [6, 6],
   mode: [1, 3], date: [2, 3], slot: [3, 3],
 };
@@ -84,8 +84,8 @@ function nextNode(id: NodeId, l: Lead, editing: boolean): NodeId {
     case "pin": return "region";
     case "region": return "area";
     case "area": return "own";
-    case "own": return l.own === "rented" ? "ownerOk" : "ptype";
-    case "ownerOk": return "ptype";
+    // Rented: no plan; the "rented" step explains and offers a way back.
+    case "own": return l.own === "rented" ? "rented" : "ptype";
     case "ptype": return l.ptype === "flat" ? "roofType" : "bill";
     case "roofType": return "bill";
     case "bill": return societyRoof ? "goal" : "roof";
@@ -108,7 +108,7 @@ const CLEARS: Partial<Record<NodeId, (keyof Lead)[]>> = {
   name: ["name"], mobile: ["mobile", "otpVerified", "mobileProof", "mobileCheck"], otp: ["otpVerified", "mobileProof"], email: ["email", "emailVerified", "emailProof"],
   emailOtp: ["emailVerified", "emailProof"],
   pin: ["pin", "state", "district", "area"], region: ["state", "district"], area: ["area"],
-  own: ["own", "ownerOk"], ownerOk: ["ownerOk"], ptype: ["ptype", "roofType"], roofType: ["roofType"],
+  own: ["own", "ownerOk"], ptype: ["ptype", "roofType"], roofType: ["roofType"],
   bill: ["bill"], billExact: ["bill"], roof: ["roof"], goal: ["goal", "cuts"], cuts: ["cuts"], when: ["when"], pay: ["pay"],
   mode: ["mode", "consult"], date: ["date"], slot: ["slot", "bookingId"],
 };
@@ -118,7 +118,6 @@ function reactionFor(id: NodeId, l: Lead, r: FlowCopy["react"]): string {
   switch (id) {
     case "emailOtp": return r.emailVerified;
     case "own": return l.own === "own" ? r.own : "";
-    case "ownerOk": return l.ownerOk === "yes" ? r.ownerYes : r.ownerNo;
     case "ptype": return l.ptype ? r[l.ptype] : "";
     case "roofType": return l.roofType === "society" ? r.roofSociety : r.roofOwn;
     case "bill":
@@ -137,7 +136,7 @@ function reactionFor(id: NodeId, l: Lead, r: FlowCopy["react"]): string {
 // Answers a step can take, used to load Saathi's next line before the user
 // picks (so the reply plays at once).
 const CHOICE_FIELD: Partial<Record<NodeId, keyof Lead>> = {
-  own: "own", ownerOk: "ownerOk", ptype: "ptype", roofType: "roofType", goal: "goal", cuts: "cuts", when: "when", pay: "pay", mode: "mode", slot: "slot",
+  own: "own", ptype: "ptype", roofType: "roofType", goal: "goal", cuts: "cuts", when: "when", pay: "pay", mode: "mode", slot: "slot",
 };
 
 // What Saathi says on each FAQ screen.
@@ -296,7 +295,7 @@ export function FlowScreen({
         return { text: geoFound.current ? fill(f.pin.found, { district: L.district ?? "", state: L.state ?? "" }) : f.pin.notFound };
       case "area": return { text: areas.length ? f.area.ask : f.area.askPlain };
       case "own": return { text: f.own.ask };
-      case "ownerOk": return { text: f.ownerOk.ask };
+      case "rented": return { text: fill(f.rented.say, { first }) };
       case "ptype": return { text: f.ptype.ask };
       case "roofType": return { text: f.roofType.ask };
       case "bill": return { text: f.bill.ask };
@@ -855,7 +854,6 @@ export function FlowScreen({
 
   const choiceFor: Partial<Record<NodeId, { field: keyof Lead; options: Option[]; en: Record<string, string>; cols?: 1 | 2 }>> = {
     own: { field: "own", options: opts(f.own), en: FLOW.en.own.opts },
-    ownerOk: { field: "ownerOk", options: opts(f.ownerOk), en: FLOW.en.ownerOk.opts, cols: 1 },
     ptype: { field: "ptype", options: opts(f.ptype), en: FLOW.en.ptype.opts },
     roofType: { field: "roofType", options: opts(f.roofType), en: FLOW.en.roofType.opts, cols: 1 },
     goal: { field: "goal", options: opts(f.goal), en: FLOW.en.goal.opts, cols: 1 },
@@ -887,6 +885,18 @@ export function FlowScreen({
 
   // ── render ──
   const card = (() => {
+    // Rented house: we don't install, so no plan. Change the answer, or talk to the team.
+    if (node === "rented") {
+      const rentedOpts: Option[] = [
+        { id: "change", label: f.rented.change, icon: "↩️" },
+        { id: "expert", label: f.rented.expert, icon: "📞" },
+      ];
+      return (
+        <AnswerCard label={label}>
+          <ChoiceGrid options={rentedOpts} picked={undefined} cols={1} onPick={(id) => (id === "change" ? back() : setExpert(true))} />
+        </AnswerCard>
+      );
+    }
     if (choice) {
       return (
         <AnswerCard label={label}>
