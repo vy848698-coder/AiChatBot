@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { PHONE, TOLL_FREE, whatsAppLink } from "@/lib/contact";
+import { PHONE, whatsAppLink } from "@/lib/contact";
 import { CALC, emi, rupees, rupeesShort, type Estimate } from "@/lib/estimate";
 import { FAQ } from "@/lib/faq";
 import { FLOW } from "@/lib/flowCopy";
@@ -341,9 +341,6 @@ export function ExpertSheet({ open, onClose, lang, lead, summary }: { open: bool
                 {requested ? <IconCheck className="h-5 w-5" /> : <IconCallback className="h-5 w-5" />}
                 {requested ? e.callbackDone : e.callback}
               </button>
-              <a href={`tel:${TOLL_FREE.tel}`} className="text-center text-[13px] text-ink-3 underline-offset-2 hover:underline" lang="en">
-                {e.tollFree}: {TOLL_FREE.show}
-              </a>
             </div>
             <p className="sr-only">{lead.name}</p>
           </motion.div>

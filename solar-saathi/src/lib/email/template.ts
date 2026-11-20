@@ -3,7 +3,7 @@
 // gradient (Outlook ignores gradients), no images (often blocked), and a plain
 // text version alongside. Phone numbers match the expert sheet in the app.
 
-import { PHONE, TOLL_FREE } from "../contact";
+import { PHONE } from "../contact";
 import type { Lang } from "../i18n";
 
 type Copy = {
@@ -164,8 +164,7 @@ export function codeEmail(code: string, lang: Lang, name: string) {
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #e3ebe7;">
 <tr><td style="padding-top:22px;font-size:16px;line-height:1.6;color:#33443d;">
 <div style="font-weight:700;color:#10201a;">${esc(c.questions)}</div>
-<div style="margin-top:6px;">📞 ${esc(c.call)}: <a href="tel:${PHONE.tel}" style="color:#1fa971;font-weight:700;text-decoration:none;white-space:nowrap;">${PHONE.show}</a>
-&nbsp;·&nbsp; ${esc(c.tollFree)}: <a href="tel:${TOLL_FREE.tel}" style="color:#1fa971;font-weight:700;text-decoration:none;white-space:nowrap;">${TOLL_FREE.show}</a></div>
+<div style="margin-top:6px;">📞 ${esc(c.call)}: <a href="tel:${PHONE.tel}" style="color:#1fa971;font-weight:700;text-decoration:none;white-space:nowrap;">${PHONE.show}</a></div>
 </td></tr>
 <tr><td style="padding-top:20px;">
 <a href="${SITE}" style="display:inline-block;background:#22b574;background-image:linear-gradient(180deg,#5ae3a6,#22b574);color:#05140c;font-size:16px;font-weight:800;text-decoration:none;border-radius:14px;padding:14px 26px;">${esc(c.visit)} →</a>
@@ -201,7 +200,7 @@ ${esc(c.ignore)}<br>${esc(c.why)}<br>
     ...c.steps.map((s, i) => `${i + 1}. ${s}`),
     "",
     c.questions,
-    `${c.call}: ${PHONE.show} · ${c.tollFree}: ${TOLL_FREE.show}`,
+    `${c.call}: ${PHONE.show}`,
     SITE,
     "",
     c.team,

@@ -3,10 +3,10 @@
 // WHATSAPP_NUMBER: the WhatsApp chat the customer's details are sent to when
 // they tap "WhatsApp". Digits only, with the country code (91…), no "+".
 // To test, put your own number here; then put back the client's number.
-export const WHATSAPP_NUMBER = "919124165341";
+export const WHATSAPP_NUMBER = "918093001383";
 
-export const PHONE = { tel: "+919124165341", show: "+91 91241 65341" };
-export const TOLL_FREE = { tel: "18008913731", show: "1800 891 3731" };
+// No toll-free number any more (removed Nov 2026, client's request).
+export const PHONE = { tel: "+918093001383", show: "+91 80930 01383" };
 
 // Opens WhatsApp (app on phones, WhatsApp Web on desktop) with the message
 // typed in; the customer only taps Send.
